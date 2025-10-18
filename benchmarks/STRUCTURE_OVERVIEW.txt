@@ -1,0 +1,103 @@
+L3 Benchmarks - 完整目录结构
+════════════════════════════════════════════════════════════
+
+benchmarks/
+│
+├── 📄 README.md                    # 总体说明文档
+├── 📄 CMakeLists.txt              # 统一构建配置
+├── 📄 CONSOLIDATION_REPORT.md     # 整合报告
+├── 📄 STRUCTURE_OVERVIEW.txt      # 本文件
+│
+├── 📁 codec/ ━━━━━━━━━━━━━━━━━━━━━━━  编解码性能测试 (4+1个文件)
+│   ├── 📘 README.md                   详细说明文档
+│   ├── 📜 benchmark_kernel_only.cpp   纯内核性能测试
+│   ├── 📜 benchmark_optimized.cpp     优化版本对比测试
+│   ├── 📜 main_bench.cpp              完整流程基准测试
+│   └── 📜 sosd_bench_demo.cpp         SOSD数据集测试
+│
+├── 📁 ssb/ ━━━━━━━━━━━━━━━━━━━━━━━━━  SSB数据库查询测试
+│   ├── 📘 README.md
+│   ├── 📄 CMakeLists.txt
+│   │
+│   ├── 📁 baseline/                   13个标准查询
+│   │   ├── 🔧 q11.cu - q13.cu         Query Flight 1
+│   │   ├── 🔧 q21.cu - q23.cu         Query Flight 2
+│   │   ├── 🔧 q31.cu - q34.cu         Query Flight 3
+│   │   └── 🔧 q41.cu - q43.cu         Query Flight 4
+│   │
+│   └── 📁 optimized_2push/            优化实现 (27个文件)
+│       ├── 🔧 l32.cu                   L3编解码实现
+│       ├── 🔧 qXX_2push.cu             双推送优化 (13个)
+│       └── 🔧 qXX_l32.cu               L3压缩优化 (13个)
+│
+├── 📁 random_access/                  随机访问性能测试
+│   └── 📘 README.md                   (待实现)
+│
+└── 📁 sosd/                           SOSD数据集专项测试
+    └── 📘 README.md                   (待实现)
+
+════════════════════════════════════════════════════════════
+
+统计:
+  • 测试类别: 4个 (codec, ssb, random_access, sosd)
+  • 已实现: 2个 (codec, ssb)
+  • Codec测试: 4个程序
+  • SSB测试: 40个程序 (13 baseline + 27 optimized)
+  • 文档: 6个 (1总+2类别+3其他)
+  • 配置: 2个 CMakeLists.txt
+  • 总文件数: 52个
+
+功能分类:
+  📊 Codec Benchmarks - 测试L3压缩算法本身的性能
+     ├─ 编码吞吐量
+     ├─ 解码吞吐量
+     ├─ 压缩率
+     └─ 不同数据分布
+
+  📊 SSB Benchmarks - 测试数据库查询场景的性能
+     ├─ 13个标准查询
+     ├─ Baseline vs 2-Push vs L3
+     ├─ 端到端性能
+     └─ 实际应用效果
+
+  📊 Random Access - 随机访问性能 (计划中)
+     ├─ 点查询
+     ├─ 范围查询
+     └─ 不规则访问
+
+  📊 SOSD - 标准数据集测试 (计划中)
+     ├─ books (200M)
+     ├─ fb (200M)
+     ├─ osm (800M)
+     └─ wiki (200M)
+
+构建输出:
+  build/bin/codec_benchmarks/     Codec性能测试可执行文件
+  build/bin/ssb_baseline/         SSB基线查询
+  build/bin/ssb_optimized/        SSB优化查询
+
+图例:
+  🔧 CUDA源文件 (.cu)
+  📜 C++源文件 (.cpp)
+  📘 详细说明文档
+  📄 项目文档/配置
+
+════════════════════════════════════════════════════════════
+
+快速使用:
+
+1. 编译所有benchmarks:
+   mkdir build && cd build
+   cmake .. -DBUILD_BENCHMARKS=ON
+   make -j$(nproc)
+
+2. 运行codec性能测试:
+   ./build/bin/codec_benchmarks/main_bench
+
+3. 运行SSB查询测试:
+   ./build/bin/ssb_baseline/q11
+   ./build/bin/ssb_optimized/q11_l32
+
+详见: benchmarks/README.md
+
+════════════════════════════════════════════════════════════

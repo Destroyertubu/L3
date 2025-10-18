@@ -1,0 +1,363 @@
+================================================================================
+                    L3 CODEBASE - QUICK REFERENCE GUIDE
+================================================================================
+
+PROJECT BASICS
+==============
+Name:           L3 (GPU-based Learned Compression)
+Location:       /root/autodl-tmp/L3
+Total Files:    127
+Primary Lang:   CUDA/C++
+Build System:   CMake 3.18+
+License:        MIT
+
+================================================================================
+LIBRARY VARIANTS
+================================================================================
+
+1. SINGLE-FILE VERSION (Production)
+   Path:           /lib/single_file/
+   Files:          20 modular files (refactored from original 1 file)
+   Size:           ~3,500 lines
+   Best For:       Production deployment, highest performance
+   Include:        #include "l3.cuh"
+   
+   Key Modules:
+   - config.cuh                    (CUDA configuration)
+   - data_structures.cuh           (CompressedData, ModelType)
+   - device/device_utils.cuh       (GPU utilities)
+   - kernels/*                     (All kernel implementations)
+   - l3gpu_impl.cuh               (Main compression class)
+
+2. MODULAR VERSION (Development)
+   Path:           /lib/modular/
+   Files:          14 files across 3 categories
+   Size:           ~6,300 lines
+   Best For:       Learning, algorithm research, modifications
+   
+   Categories:
+   - codec/        (7 files) - Encoding/decoding kernels
+   - utils/        (5 files) - Bit packing, random access, timers
+   - data/         (2 files) - Dataset loading and conversion
+
+================================================================================
+GPU COMPRESSION FLOW
+================================================================================
+
+ENCODING (Compression)
+=====================
+File: /lib/modular/codec/encoder.cu
+Steps:
+  1. Partition data into variable-length segments
+  2. Fit linear/polynomial models per partition
+  3. Calculate residuals (deltas)
+  4. Bit-pack deltas with optimal width per partition
+  5. Store metadata + bit-packed array
+
+Output: CompressedDataL3<T> structure with:
+  - Model parameters (theta0, theta1, theta2, theta3)
+  - Delta bit widths
+  - Bit-packed delta array
+  - Partition boundaries
+
+DECODING (Decompression)
+=======================
+File: /lib/modular/codec/decompression_kernels.cu
+Steps:
+  1. Load partition metadata
+  2. Apply model to compute predictions
+  3. Extract bits from packed delta array
+  4. Decompress: predicted_value + delta = original_value
+
+Optimization: Warp-cooperative shared memory staging
+
+================================================================================
+RANDOM ACCESS & QUERY EXECUTION
+================================================================================
+
+RANDOM ACCESS
+=============
+File: /lib/modular/utils/random_access_kernels.cu
+
+Access single value without full decompression:
+  __global__ void randomAccessKernel(
+      const CompressedDataL3<T>* compressed,
+      const int32_t* indices,        // Which indices to access
+      T* output)
+
+Algorithm:
+  1. Binary search to find partition containing index
+  2. Compute model prediction for that index
+  3. Extract delta for that index from bit-packed array
+  4. Return: prediction + delta
+
+QUERY EXECUTION
+===============
+SSB Benchmark Queries: /benchmarks/ssb/
+
+Query Types (13 total):
+  Q1.1-1.3   (Flight 1) - Simple aggregations
+  Q2.1-2.3   (Flight 2) - 2-table joins
+  Q3.1-3.4   (Flight 3) - 3-table joins
+  Q4.1-4.3   (Flight 4) - Complex queries
+
+Three Implementations per Query:
+  1. baseline/qXX.cu         - Uncompressed baseline
+  2. optimized_2push/qXX_2push.cu  - 2-stage filtering
+  3. optimized_2push/qXX_l32.cu    - With L3 compression
+
+Expected Speedup: 1.8-2.2x with L3 compression
+
+PREDICATE PUSHDOWN OPTIMIZATION
+================================
+File: /include/common/l3_predicate_pushdown.cuh
+
+Before decompressing, check if partition can match filter:
+  - Use partition min/max bounds
+  - Compare with filter range
+  - Skip partitions that definitely don't match
+  - Only decompress potentially matching partitions
+
+Result: 1.5-3x faster for selective filters
+
+================================================================================
+KEY DATA STRUCTURES
+================================================================================
+
+CompressedDataL3<T>  (from l3_format.hpp)
+==================
+struct {
+    int32_t num_partitions;
+    int32_t total_values;
+    int32_t* d_model_types;           // MODEL_CONSTANT, LINEAR, POLYNOMIAL2, ...
+    double* d_model_params;           // theta0, theta1, theta2, theta3
+    int32_t* d_delta_bits;            // Bits per delta (adaptive per partition)
+    int64_t* d_delta_array_bit_offsets;
+    uint32_t* delta_array;            // Bit-packed residuals
+}
+
+PartitionMetadata
+==================
+Per-partition information:
+- start_indices[i]          (start element index)
+- end_indices[i]            (end element index, exclusive)
+- model_types[i]            (which model: 0-4)
+- model_params[4*i..4*i+3]  (model coefficients)
+- delta_bits[i]             (bits used to store deltas)
+- delta_array_bit_offsets[i] (bit offset into delta array)
+
+================================================================================
+BENCHMARKS & PERFORMANCE
+================================================================================
+
+CODEC BENCHMARKS (encoding/decoding performance)
+================================================
+Location: /benchmarks/codec/
+
+Programs:
+  - benchmark_kernel_only.cpp     Pure kernel perf (no data transfer)
+  - benchmark_optimized.cpp       Optimization comparisons
+  - main_bench.cpp                End-to-end complete flow
+  - sosd_bench_demo.cpp          Real dataset (SOSD) testing
+
+Performance (NVIDIA A100):
+  Encoding:    28-32 GB/s
+  Decoding:    40-45 GB/s
+  Compression: 3.5-4.5x ratio
+
+SSB BENCHMARKS (database queries)
+=================================
+Location: /benchmarks/ssb/
+
+Baseline:     Uncompressed queries (reference)
+2-Push:       Two-stage filtering optimization
+L3:           With L3 compression (marked as l32)
+
+Query Performance (100M lineorder rows):
+  Q1.x  Baseline: 8-10ms    L3: 4-5ms    Speedup: 2.0-2.2x
+  Q2.x  Baseline: 12-16ms   L3: 7-9ms    Speedup: 1.8-2.0x
+  Q3.x  Baseline: 18-24ms   L3: 10-13ms  Speedup: 1.8-2.0x
+  Q4.x  Baseline: 24-30ms   L3: 13-17ms  Speedup: 1.8-2.0x
+
+================================================================================
+IMPORTANT FILES BY PURPOSE
+================================================================================
+
+FORMAT & STRUCTURE
+  l3_format.hpp                   Bitstream format specification
+  l3_codec.hpp                    Codec interface
+  data_structures.cuh             Core data structures
+  config.cuh                      Configuration macros
+
+COMPRESSION
+  encoder.cu                      Model fitting + encoding
+  encoder_optimized.cu            Optimized encoder
+  compression_kernels_impl.cuh    Kernel implementations
+
+DECOMPRESSION
+  decompression_kernels.cu        Core decompression
+  decoder_specialized.cu          Specialized decoder
+  decoder_warp_opt.cu            Warp-optimized decoder
+
+OPTIMIZATION
+  l3_predicate_pushdown.cuh       Predicate pushdown
+  bitpack_utils.cu                Bit packing utilities
+  random_access_kernels.cu        Random access support
+
+UTILITIES
+  ssb_utils.h                     Star Schema Benchmark utils
+  ssb_l3_utils.cuh                SSB + L3 integration
+  timers.cu                       GPU timing
+
+BENCHMARKS
+  main_bench.cpp                  Codec benchmarking
+  sosd_bench_demo.cpp            SOSD dataset testing
+  ssb/baseline/qXX.cu            Baseline SSB queries
+  ssb/optimized_2push/qXX_l32.cu  L3-compressed queries
+
+================================================================================
+BUILD INSTRUCTIONS
+================================================================================
+
+QUICK BUILD
+===========
+cd /root/autodl-tmp/L3
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+
+BUILD VARIANTS
+==============
+# Single-file only
+cmake .. -DUSE_SINGLE_FILE=ON -DUSE_MODULAR=OFF
+
+# Modular only
+cmake .. -DUSE_SINGLE_FILE=OFF -DUSE_MODULAR=ON
+
+# No benchmarks
+cmake .. -DBUILD_BENCHMARKS=OFF
+
+# Specific CUDA architecture
+cmake .. -DCMAKE_CUDA_ARCHITECTURES="86"
+
+OUTPUT LOCATIONS
+================
+Libraries:  build/lib/libl3_single.a, build/lib/libl3_modular.a
+Codec Bins: build/bin/codec_benchmarks/*
+SSB Bins:   build/bin/ssb_baseline/q*, build/bin/ssb_optimized/q*_*
+
+RUN BENCHMARKS
+==============
+# Codec performance
+./build/bin/codec_benchmarks/main_bench
+
+# SSB Query (baseline)
+./build/bin/ssb_baseline/q11
+
+# SSB Query (L3 compressed)
+./build/bin/ssb_optimized/q11_l32
+
+================================================================================
+CONFIGURATION OPTIONS
+================================================================================
+
+CMAKE_BUILD_TYPE:       Release (default), Debug
+CMAKE_CUDA_ARCHITECTURES: 75 (Turing), 80 (Ampere), 86 (RTX 30xx), 89 (Ada)
+
+BUILD_BENCHMARKS:       ON (default), OFF
+BUILD_EXAMPLES:         ON (default), OFF
+BUILD_TOOLS:            ON (default), OFF
+ENABLE_TESTING:         OFF (default), ON
+USE_SINGLE_FILE:        ON (default), OFF
+USE_MODULAR:            ON (default), OFF
+
+CUDA COMPILER FLAGS:
+  Release: -O3 -DNDEBUG -use_fast_math
+  Debug:   -g -G -O0
+
+================================================================================
+CRITICAL INVARIANTS
+================================================================================
+
+FORMAT SPECIFICATION
+  Magic Number:       0x474C4543 ("GLEC")
+  Format Version:     0x00010000 (v1.0.0)
+  
+BITSTREAM INVARIANTS
+  - Partitions are non-overlapping
+  - end_indices[i] <= start_indices[i+1]
+  - Deltas stored in signed 2's complement
+  - Sign extension applied after extraction
+  
+MODEL TYPES
+  0 = CONSTANT        (f(x) = theta0)
+  1 = LINEAR          (f(x) = theta0 + theta1*x)
+  2 = POLYNOMIAL2     (f(x) = theta0 + theta1*x + theta2*x^2)
+  3 = POLYNOMIAL3     (f(x) = theta0 + theta1*x + theta2*x^2 + theta3*x^3)
+  4 = DIRECT_COPY     (no model, store raw values)
+
+ENCODER-DECODER CORRESPONDENCE
+  calculateDelta(actual, predicted) must be inverse of applyDelta(predicted, delta)
+  
+OVERFLOW HANDLING
+  Unsigned values > 2^53 use DIRECT_COPY model
+
+================================================================================
+DOCUMENTATION
+================================================================================
+
+Root Documentation
+  README.md                       Main project documentation
+  PROJECT_STRUCTURE.md            Project organization (Chinese)
+  QUICKSTART.md                   5-minute quick start
+  START_HERE.txt                  Getting started guide
+  DELIVERY_NOTES.md              Delivery information
+  FINAL_SUMMARY.txt              Project summary
+
+Technical Documentation
+  docs/README.md                  Documentation index
+  docs/ARCHITECTURE.md            System architecture
+  docs/INSTALLATION.md            Installation guide
+  docs/MIGRATION.md              Migration guide
+
+Library Documentation
+  lib/single_file/README.md       Single-file library guide
+  lib/modular/README.md           Modular library guide
+
+Benchmark Documentation
+  benchmarks/README.md            Benchmarks overview
+  benchmarks/codec/README.md      Codec benchmarks
+  benchmarks/ssb/README.md        SSB benchmarks
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Cannot find CUDA
+  Install CUDA Toolkit 11.0+
+  Check CUDA_HOME environment variable
+  Verify nvidia-smi works
+
+Cannot find CUB/Thrust
+  They're included with CUDA, ensure proper CUDA installation
+
+Performance is slow
+  Use Release build: -DCMAKE_BUILD_TYPE=Release
+  Check GPU usage: nvidia-smi
+  Verify CUDA architecture matches GPU: nvidia-smi | grep Compute
+
+Compilation errors
+  Check CUDA compute capability: nvidia-smi
+  May need to specify: -DCMAKE_CUDA_ARCHITECTURES="XX"
+  Ensure CUDA 11.0+ and C++17 compatible compiler
+
+================================================================================
+CONTACT & RESOURCES
+================================================================================
+
+Project Location:   /root/autodl-tmp/L3
+Analysis Created:   2024-10-18
+
+For detailed analysis, see: CODEBASE_COMPLETE_ANALYSIS.md
+
+================================================================================
