@@ -1,0 +1,116 @@
+# Build directories
+build/
+bin/
+lib/
+*.o
+*.a
+*.so
+*.dylib
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# Compiled executables
+test_*
+!test_*.cpp
+!test_*.cu
+q[0-9]*_2push
+!q[0-9]*_2push.cu
+debug_*
+!debug_*.cu
+!debug_*.cpp
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.code-workspace
+
+# CUDA compilation files
+*.ptx
+*.cubin
+*.fatbin
+
+# Logs and output files
+*.log
+*.out
+*.txt
+!CMakeLists.txt
+!requirements.txt
+*.csv
+*.json
+!agents_decode.json
+!package.json
+
+# Data files (comment out if you want to include small test data)
+data/*.bin
+data/*.dat
+ssb_data/
+*.parquet
+
+# Benchmark results (keep structure, ignore data)
+benchmarks/*.csv
+benchmarks/*.json
+benchmarks/results/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Python cache (if using Python scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# Core dumps and debug files
+core
+core.*
+vgcore.*
+*.stackdump
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Documentation build files
+docs/_build/
+docs/.doctrees/
+*.pdf
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Package files
+*.tar.gz
+*.zip
+*.7z
+
+# Claude Code
+.claude/

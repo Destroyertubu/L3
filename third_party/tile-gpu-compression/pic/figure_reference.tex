@@ -1,0 +1,63 @@
+% LaTeX figure reference for nvcomp vs G-LeCo comparison
+%
+% Usage: Copy this code into your Overleaf document where you want to insert the figure
+% Make sure the PDF file is uploaded to your Overleaf project in the same relative path
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{pic/nvcomp_L3_comparison.pdf}
+    \caption{Performance comparison between nvcomp algorithms and G-LeCo on six datasets.
+    \textbf{Left:} Compression ratio for each dataset (lower is better).
+    \textbf{Right:} Decompression throughput comparison. G-LeCo achieves 8.88$\times$ average
+    compression ratio and 994.84 GB/s average throughput, outperforming all nvcomp algorithms.}
+    \label{fig:nvcomp_L3_comparison}
+\end{figure}
+
+% To reference this figure in text, use:
+% As shown in Figure~\ref{fig:nvcomp_L3_comparison}, G-LeCo demonstrates...
+
+% Alternative caption (shorter version):
+% \caption{Performance comparison between nvcomp algorithms and G-LeCo on compression ratio
+% (left, 6 datasets) and decompression throughput (right).}
+
+% If you want to adjust the width, you can use:
+% \includegraphics[width=0.9\textwidth]{pic/nvcomp_L3_comparison.pdf}
+% or
+% \includegraphics[width=\linewidth]{pic/nvcomp_L3_comparison.pdf}
+
+% For two-column format papers, you might want to use:
+% \begin{figure*}[htbp]
+%     \centering
+%     \includegraphics[width=\textwidth]{pic/nvcomp_L3_comparison.pdf}
+%     \caption{...}
+%     \label{fig:nvcomp_L3_comparison}
+% \end{figure*}
+
+% ============================================================================
+% Figure 2: Tile methods vs G-LeCo comparison
+% ============================================================================
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{pic/side_by_side_performance_percentage.pdf}
+    \caption{Performance comparison of Tile-based methods and G-LeCo on six SOSD datasets.
+    \textbf{Left:} Compressed size percentage (lower is better).
+    \textbf{Right:} Decompression throughput. G-LeCo achieves the best compression ratio
+    (8.88$\times$ average) while maintaining competitive throughput (994.84 GB/s average).}
+    \label{fig:tile_L3_comparison}
+\end{figure}
+
+% To reference this figure in text, use:
+% As shown in Figure~\ref{fig:tile_L3_comparison}, G-LeCo demonstrates...
+
+% Alternative caption (shorter version):
+% \caption{Performance comparison of Tile-FOR, Tile-DFOR, Tile-RFOR, and G-LeCo on
+% compression ratio (left) and throughput (right) across six SOSD datasets.}
+
+% For two-column format papers:
+% \begin{figure*}[htbp]
+%     \centering
+%     \includegraphics[width=\textwidth]{pic/side_by_side_performance_percentage.pdf}
+%     \caption{...}
+%     \label{fig:tile_L3_comparison}
+% \end{figure*}
