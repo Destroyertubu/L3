@@ -84,22 +84,6 @@ make
 ./test_random_access_comprehensive --max=10000000
 ```
 
-## 📊 Performance
-
-Tested on SSB Scale Factor 20 (119,968,352 rows):
-
-| Query Type | Avg Time | Selectivity Range | Speedup |
-|-----------|----------|-------------------|---------|
-| Q1.x (Simple Agg) | 1.3-2.8 ms | 1.2-14.3% | ~100x |
-| Q2.x (Multi-Join) | 1.3-1.7 ms | 0.06-2.3% | ~150x |
-| Q3.x (Complex Join) | 1.3-1.9 ms | 0.002-85% | ~200x |
-| Q4.x (5-Table Join) | 2.8-3.6 ms | 0.002-0.2% | ~250x |
-
-**Key Features:**
-- Compression Ratio: 3-10x depending on data characteristics
-- Decompression Throughput: 50-100 GB/s
-- Random Access Latency: <100 ns per element
-
 ## 🧪 Testing
 
 ### Unit Tests
@@ -148,18 +132,6 @@ Options:
 - `PHASE2_PERSISTENT_THREADS`: Enable persistent kernel threads (default: OFF)
 - `PHASE2_DEBUG_ROUTING`: Enable routing debugging (default: OFF)
 
-## 📝 Citation
-
-If you use this code in your research, please cite:
-
-```bibtex
-@inproceedings{L32024,
-  title={GLECO: GPU-Accelerated Learned Compression for OLAP Queries},
-  author={Your Name},
-  booktitle={Proceedings of Conference},
-  year={2024}
-}
-```
 
 ## 🤝 Contributing
 
@@ -183,4 +155,4 @@ For questions and feedback:
 
 ---
 
-**Status**: Active Development | **Version**: 1.0.0 | **Last Updated**: October 2024
+**Status**: Active Development | **Version**: 1.0.0 | **Last Updated**: October 2025
