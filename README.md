@@ -85,25 +85,6 @@ L3/
 - **C++ Compiler**: GCC 7.0+ or Clang with C++17 support
 - **OS**: Linux (tested on Ubuntu 20.04/22.04)
 
-## Quick Start
-
-### Build
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/L3.git
-cd L3
-
-# Create build directory
-mkdir -p build && cd build
-
-# Configure with CMake
-cmake ..
-
-# Build the project
-make -j$(nproc)
-```
-
 ### Run Example
 
 ```bash
