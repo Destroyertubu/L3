@@ -2,9 +2,9 @@
 # SSB Full Benchmark - Compare all 4 strategies across 13 queries
 # Generates CSV output for analysis
 
-BIN_DIR="/root/autodl-tmp/code/L3_opt/build/bin"
+BIN_DIR="/root/autodl-tmp/code/L3/build/bin"
 DATA_DIR="/root/autodl-tmp/test/ssb_data"
-OUTPUT_DIR="/root/autodl-tmp/code/L3_opt/tests/ssb_ultra/results"
+OUTPUT_DIR="/root/autodl-tmp/code/L3/tests/ssb_ultra/results"
 mkdir -p $OUTPUT_DIR
 
 STRATEGIES="decompress_first fused_query predicate_pushdown random_access"

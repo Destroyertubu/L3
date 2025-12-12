@@ -207,7 +207,7 @@ int main() {
     };
 
     // Open CSV file for results
-    std::string csv_filename = "/root/autodl-tmp/test/paint_scripts/encode/L3/L3_optimized_results.csv";
+    std::string csv_filename = "/root/autodl-tmp/test/paint_scripts/encode/L3/L3imized_results.csv";
     std::ofstream csv_file(csv_filename);
     csv_file << "Dataset,Elements,Size_MB,Compression_Ratio,Avg_Delta_Bits,"
              << "Compress_Time_ms,Compress_Throughput_GBps,"

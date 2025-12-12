@@ -405,7 +405,7 @@ def main():
     results = analyze_data_structure(data)
 
     # Generate plots
-    output_dir = "/root/autodl-tmp/code/L3_opt/reports/L3/datasets/2-normal/analysis"
+    output_dir = "/root/autodl-tmp/code/L3/reports/L3/datasets/2-normal/analysis"
     generate_plots(data, output_dir)
 
     # Final assessment

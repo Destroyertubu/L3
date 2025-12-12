@@ -14,7 +14,7 @@ from typing import List, Dict, Optional, Tuple
 import json
 
 DATA_DIR = "/root/autodl-tmp/test/data/sosd"
-BIN_DIR = "/root/autodl-tmp/code/L3_opt/bin"
+BIN_DIR = "/root/autodl-tmp/code/L3/bin"
 
 # All 20 datasets with their properties
 DATASETS = [
@@ -384,14 +384,14 @@ def main():
     report = generate_markdown_report(all_results, gpu_info)
 
     # Save report
-    report_path = "/root/autodl-tmp/code/L3_opt/reports/L3/All/comprehensive_report.md"
+    report_path = "/root/autodl-tmp/code/L3/reports/L3/All/comprehensive_report.md"
     os.makedirs(os.path.dirname(report_path), exist_ok=True)
     with open(report_path, 'w') as f:
         f.write(report)
     print(f"Report saved to: {report_path}")
 
     # Also save JSON results
-    json_path = "/root/autodl-tmp/code/L3_opt/reports/L3/All/results.json"
+    json_path = "/root/autodl-tmp/code/L3/reports/L3/All/results.json"
     with open(json_path, 'w') as f:
         json.dump([{
             "dataset": r.dataset,

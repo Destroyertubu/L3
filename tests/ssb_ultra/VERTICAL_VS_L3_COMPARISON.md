@@ -214,4 +214,4 @@ Use VerticalGPU for:
   3. 内存优势:
   - L3使用GPU内存比VerticalGPU少57% (~0.9GB vs ~2.1GB)
 
-  完整报告已保存至: /root/autodl-tmp/code/L3_opt/tests/ssb_ultra/Vertical_VS_L3_COMPARISON.md
+  完整报告已保存至: /root/autodl-tmp/code/L3/tests/ssb_ultra/Vertical_VS_L3_COMPARISON.md
