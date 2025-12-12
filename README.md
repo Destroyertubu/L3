@@ -1,4 +1,4 @@
-# L3: GPU-Accelerated Learned Compression for OLAP Queries
+# L3: GPU-Accelerated Learned Lossless Lightweight Compression
 
 A high-performance GPU-based data compression and query processing system using learned models for analytical workloads.
 
