@@ -25,7 +25,7 @@ using namespace std;
 #define S_LEN 20000
 #define C_LEN 300000
 #define D_LEN 2556
-#else // 20 - Using GLECO data
+#else // 20 - Using L3 data
 #define DATA_DIR BASE_PATH "/root/autodl-tmp/test/ssb_data/"
 #define LO_LEN 119968352
 #define P_LEN 1400000

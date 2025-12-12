@@ -1,9 +1,9 @@
 /**
- * GLECO Encoder Comparison Test
+ * L3 Encoder Comparison Test
  *
  * 对比两种编码器：
  * 1. 固定长度分区 (Fixed-Length) - 现有encoder
- * 2. 变长分区 (Variable-Length) - GLECO2方法
+ * 2. 变长分区 (Variable-Length) - L32方法
  *
  * 测试数据：/root/autodl-tmp/test/data/fb_200M_uint64.bin
  */
@@ -31,7 +31,7 @@ std::vector<PartitionInfo> createPartitionsVariableLength(
 
 // 外部声明Phase 2 Bucket解压缩函数
 template<typename T>
-void decompressGLECO_Phase2_Bucket(
+void decompressL3_Phase2_Bucket(
     const int32_t* d_start_indices,
     const int32_t* d_end_indices,
     const int32_t* d_model_types,
@@ -176,7 +176,7 @@ TestResult testFixedLength(const std::vector<uint64_t>& data, int partition_size
     for (int i = 0; i < num_iters; ++i) {
         CUDA_CHECK(cudaEventRecord(start));
 
-        decompressGLECO_Phase2_Bucket<uint64_t>(
+        decompressL3_Phase2_Bucket<uint64_t>(
             compressed->d_start_indices,
             compressed->d_end_indices,
             compressed->d_model_types,
@@ -297,7 +297,7 @@ TestResult testVariableLength(const std::vector<uint64_t>& data, int base_partit
     for (int i = 0; i < num_iters; ++i) {
         CUDA_CHECK(cudaEventRecord(start));
 
-        decompressGLECO_Phase2_Bucket<uint64_t>(
+        decompressL3_Phase2_Bucket<uint64_t>(
             compressed->d_start_indices,
             compressed->d_end_indices,
             compressed->d_model_types,
@@ -399,7 +399,7 @@ int main(int argc, char** argv) {
     size_t max_elements = (argc > 2) ? std::stoull(argv[2]) : 0;
 
     std::cout << "\n" << std::string(80, '=') << std::endl;
-    std::cout << "GLECO Encoder Comparison Test" << std::endl;
+    std::cout << "L3 Encoder Comparison Test" << std::endl;
     std::cout << std::string(80, '=') << std::endl;
     std::cout << "Input file: " << input_file << std::endl;
     if (max_elements > 0) {

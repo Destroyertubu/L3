@@ -5,7 +5,7 @@
 set -e
 
 echo "════════════════════════════════════════════════════════════"
-echo "  Building GLECO Test (Reorganized Structure)"
+echo "  Building L3 Test (Reorganized Structure)"
 echo "════════════════════════════════════════════════════════════"
 
 CUDA_ARCH="90"

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Nsight Compute profiling script for GLECO kernels
+# Nsight Compute profiling script for L3 kernels
 
 set -e
 
@@ -10,7 +10,7 @@ BENCH_EXEC="${BUILD_DIR}/bin/L3_bench"
 RESULTS_DIR="${PROJECT_ROOT}/results"
 
 echo "==================================="
-echo "GLECO Kernel Profiling with Nsight Compute"
+echo "L3 Kernel Profiling with Nsight Compute"
 echo "==================================="
 
 # Check if ncu is available

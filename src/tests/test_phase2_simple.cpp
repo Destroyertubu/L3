@@ -16,7 +16,7 @@
 } while(0)
 
 template<typename T>
-void decompressGLECO_Phase2(
+void decompressL3_Phase2(
     const int32_t*, const int32_t*, const int32_t*, const double*,
     const int32_t*, const int64_t*, const uint32_t*, int, int, T*, int, bool);
 
@@ -66,7 +66,7 @@ int main() {
     // Decompress using Phase 2
     std::cout << "Decompressing with Phase 2...\n";
 
-    decompressGLECO_Phase2(
+    decompressL3_Phase2(
         compressed->d_start_indices,
         compressed->d_end_indices,
         compressed->d_model_types,

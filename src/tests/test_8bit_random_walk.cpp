@@ -14,7 +14,7 @@
 
 // Forward declaration
 template<typename T>
-void decompressGLECO_Phase2(
+void decompressL3_Phase2(
     const int32_t* d_start_indices,
     const int32_t* d_end_indices,
     const int32_t* d_model_types,
@@ -95,7 +95,7 @@ int main() {
 
     std::cout << "Testing Phase 2 decompression (should use 8-bit kernel)...\n";
 
-    decompressGLECO_Phase2(
+    decompressL3_Phase2(
         compressed->d_start_indices,
         compressed->d_end_indices,
         compressed->d_model_types,

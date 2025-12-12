@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Build script for GLECO optimized decompression
+# Build script for L3 optimized decompression
 
 set -e  # Exit on error
 
@@ -8,7 +8,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${PROJECT_ROOT}/build"
 
 echo "==================================="
-echo "Building GLECO Optimized Project"
+echo "Building L3 Optimized Project"
 echo "==================================="
 echo "Project root: ${PROJECT_ROOT}"
 echo "Build directory: ${BUILD_DIR}"

@@ -20,7 +20,7 @@ int main() {
     cout << endl;
 
     // Compress with small partitions for easier debugging
-    CompressedDataGLECO<uint32_t>* compressed = compressData(lo_orderdate, 4096);
+    CompressedDataL3<uint32_t>* compressed = compressData(lo_orderdate, 4096);
 
     cout << "\nCompression info:" << endl;
     cout << "  Num partitions: " << compressed->num_partitions << endl;

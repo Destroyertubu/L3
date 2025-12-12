@@ -16,7 +16,7 @@
 using namespace std;
 //using namespace cub;
 
-#define SF 20 // FLS_CHG
+#define SF 10 // FLS_CHG
 
 #define BASE_PATH "" // FLS_CHG
 
@@ -28,13 +28,13 @@ using namespace std;
 #define C_LEN 30000
 #define D_LEN 2556
 #elif SF == 10
-#define DATA_DIR BASE_PATH "s10_columnar/"
+#define DATA_DIR "/root/autodl-tmp/test/ssb_data/"
 #define LO_LEN 59986214
 #define P_LEN 800000
 #define S_LEN 20000
 #define C_LEN 300000
 #define D_LEN 2556
-#else // 20 - Using GLECO data
+#else // 20 - Using L3 data
 #define DATA_DIR BASE_PATH "/root/autodl-tmp/test/ssb_data/"
 #define LO_LEN 119968352
 #define P_LEN 1400000

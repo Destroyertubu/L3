@@ -1,5 +1,5 @@
 #!/bin/bash
-# GLECO项目整合脚本 - 将tests/目录整合到新结构中
+# L3项目整合脚本 - 将tests/目录整合到新结构中
 # 用法: bash scripts/integrate_tests.sh [stage]
 #   stage: 1=基础, 2=扩展, 3=应用, all=全部
 
@@ -11,7 +11,7 @@ cd "$PROJECT_ROOT"
 STAGE=${1:-1}
 
 echo "════════════════════════════════════════════════════════════"
-echo "  GLECO Tests Integration Script"
+echo "  L3 Tests Integration Script"
 echo "════════════════════════════════════════════════════════════"
 echo "Stage: $STAGE"
 echo ""
@@ -95,16 +95,16 @@ stage2_extensions() {
 
     log_success "Random Access已整合"
 
-    # GLECO v2
-    log_info "整合GLECO v2..."
+    # L3 v2
+    log_info "整合L3 v2..."
     if [ -f "tests/L32.cu" ]; then
         cp tests/L32.cu extensions/L3_v2/
-        log_success "GLECO v2已整合"
+        log_success "L3 v2已整合"
     fi
 
     # 创建README
     cat > extensions/random_access/README.md << 'RAEOF'
-# GLECO Random Access Extension
+# L3 Random Access Extension
 
 随机访问功能扩展，支持在压缩数据上进行高效的随机查询。
 
@@ -123,9 +123,9 @@ stage2_extensions() {
 RAEOF
 
     cat > extensions/L3_v2/README.md << 'V2EOF'
-# GLECO Version 2
+# L3 Version 2
 
-GLECO压缩算法的改进版本，优化了压缩比和性能。
+L3压缩算法的改进版本，优化了压缩比和性能。
 
 ## 主要改进
 - 结构体数组（SoA）优化
@@ -194,7 +194,7 @@ stage3_applications() {
 
     # 创建SSB README
     cat > applications/ssb/README.md << 'SSBEOF'
-# Star Schema Benchmark (SSB) for GLECO
+# Star Schema Benchmark (SSB) for L3
 
 SSB是标准的数据库分析性能基准测试。
 
@@ -247,7 +247,7 @@ generate_report() {
     log_info "=== 生成整合报告 ==="
 
     cat > INTEGRATION_REPORT.md << 'EOF'
-# GLECO项目整合报告
+# L3项目整合报告
 
 ## 执行日期
 EOF

@@ -1,5 +1,5 @@
 /**
- * SSB (Star Schema Benchmark) Data Loader for GLECO Testing
+ * SSB (Star Schema Benchmark) Data Loader for L3 Testing
  *
  * Loads SSB data generated at Scale Factor 20:
  * - LINEORDER: 119,968,352 rows (17 columns)

@@ -73,17 +73,48 @@ bool SOSDLoader::getDatasetInfo(const std::string& filepath,
 // Load binary format
 template<typename T>
 bool SOSDLoader::loadBinary(const std::string& filepath, std::vector<T>& data) {
-    std::ifstream file(filepath, std::ios::binary);
+    std::ifstream file(filepath, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
         std::cerr << "Failed to open binary file: " << filepath << std::endl;
         return false;
     }
 
-    // Read 8-byte header (element count)
-    uint64_t count;
-    file.read(reinterpret_cast<char*>(&count), sizeof(uint64_t));
+    // Get file size
+    size_t file_size = file.tellg();
+    file.seekg(0);
 
-    if (count == 0 || count > 1000000000ULL) {  // Sanity check
+    // Try to read 8-byte header (SOSD format: count + data)
+    uint64_t header_count;
+    file.read(reinterpret_cast<char*>(&header_count), sizeof(uint64_t));
+
+    // Determine if this is SOSD format (with header) or raw format
+    // SOSD format: header_count * sizeof(T) + 8 == file_size
+    // Raw format: file_size % sizeof(T) == 0
+    size_t count;
+    bool is_sosd_format = false;
+
+    if (header_count > 0 && header_count <= 2000000000ULL) {
+        size_t expected_size_with_header = header_count * sizeof(T) + sizeof(uint64_t);
+        if (expected_size_with_header == file_size) {
+            is_sosd_format = true;
+            count = header_count;
+        }
+    }
+
+    if (!is_sosd_format) {
+        // Raw binary format - no header
+        if (file_size % sizeof(T) != 0) {
+            std::cerr << "Invalid file size for raw binary: " << file_size << std::endl;
+            return false;
+        }
+        count = file_size / sizeof(T);
+        file.seekg(0);  // Reset to beginning for raw format
+        std::cout << "Detected raw binary format (no header)" << std::endl;
+    } else {
+        std::cout << "Detected SOSD format (with header)" << std::endl;
+    }
+
+    if (count == 0 || count > 2000000000ULL) {
         std::cerr << "Invalid element count: " << count << std::endl;
         return false;
     }

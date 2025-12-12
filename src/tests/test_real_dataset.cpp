@@ -19,13 +19,13 @@
 } while(0)
 
 template<typename T>
-void decompressGLECO_Phase2(
+void decompressL3_Phase2(
     const int32_t*, const int32_t*, const int32_t*, const double*,
     const int32_t*, const int64_t*, const uint32_t*, int, int, T*, int, bool);
 
 template<typename T>
 float benchmarkPhase2(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     int avg_delta_bits,
     bool use_persistent,
@@ -37,7 +37,7 @@ float benchmarkPhase2(
 
     // Warmup
     for (int i = 0; i < 5; i++) {
-        decompressGLECO_Phase2(
+        decompressL3_Phase2(
             compressed->d_start_indices,
             compressed->d_end_indices,
             compressed->d_model_types,
@@ -59,7 +59,7 @@ float benchmarkPhase2(
     for (int i = 0; i < num_iters; i++) {
         CUDA_CHECK(cudaEventRecord(start));
 
-        decompressGLECO_Phase2(
+        decompressL3_Phase2(
             compressed->d_start_indices,
             compressed->d_end_indices,
             compressed->d_model_types,
@@ -131,7 +131,7 @@ std::vector<uint32_t> loadDataset(const std::string& filename, size_t max_elemen
 int main() {
     std::cout << "\n";
     std::cout << "╔══════════════════════════════════════════════════════════════╗\n";
-    std::cout << "║  GLECO Phase 2 - Real Dataset Performance Test              ║\n";
+    std::cout << "║  L3 Phase 2 - Real Dataset Performance Test              ║\n";
     std::cout << "╚══════════════════════════════════════════════════════════════╝\n";
     std::cout << "\n";
 

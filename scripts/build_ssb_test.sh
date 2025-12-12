@@ -4,7 +4,7 @@
 set -e  # Exit on error
 
 echo "======================================================================="
-echo "Building GLECO SSB Query Tests"
+echo "Building L3 SSB Query Tests"
 echo "======================================================================="
 
 # Project root directory

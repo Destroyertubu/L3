@@ -4,7 +4,7 @@
 #include <dirent.h>
 #include <cuda_runtime.h>
 #include "sosd_loader.h"
-#include "L3_opt.h"
+#include "L3.h"
 
 #define CUDA_CHECK(call)                                                      \
     do {                                                                      \
@@ -70,7 +70,7 @@ void benchmarkDataset(const std::string& filepath) {
 }
 
 int main(int argc, char** argv) {
-    std::cout << "GLECO SOSD Benchmark Demo" << std::endl;
+    std::cout << "L3 SOSD Benchmark Demo" << std::endl;
     std::cout << "=========================" << std::endl;
 
     // Get GPU info

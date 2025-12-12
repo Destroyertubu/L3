@@ -1,10 +1,10 @@
-#ifndef GLECO_FORMAT_HPP
-#define GLECO_FORMAT_HPP
+#ifndef L3_FORMAT_HPP
+#define L3_FORMAT_HPP
 
 #include <cstdint>
 
 /**
- * GLECO (Greedy LEarned COmpression) Format Specification
+ * L3 (Greedy LEarned COmpression) Format Specification
  *
  * This header defines the invariant bitstream layout and data structures
  * that MUST remain consistent between encoder and decoder.
@@ -20,8 +20,8 @@
  */
 
 // Format version for compatibility checking
-constexpr uint32_t GLECO_FORMAT_VERSION = 0x00010000;  // v1.0.0
-constexpr uint32_t GLECO_MAGIC = 0x474C4543;  // "GLEC" in ASCII
+constexpr uint32_t L3_FORMAT_VERSION = 0x00010000;  // v1.0.0
+constexpr uint32_t L3_MAGIC = 0x474C4543;  // "GLEC" in ASCII
 
 // Model types (MUST match between encoder and decoder)
 enum ModelType : int32_t {
@@ -29,7 +29,8 @@ enum ModelType : int32_t {
     MODEL_LINEAR = 1,        // f(x) = θ₀ + θ₁·x
     MODEL_POLYNOMIAL2 = 2,   // f(x) = θ₀ + θ₁·x + θ₂·x²
     MODEL_POLYNOMIAL3 = 3,   // f(x) = θ₀ + θ₁·x + θ₂·x² + θ₃·x³
-    MODEL_DIRECT_COPY = 4    // No prediction, store raw values
+    MODEL_FOR_BITPACK = 4,   // FOR + BitPacking: delta = val - base (base = min)
+    MODEL_DIRECT_COPY = 5    // Direct copy: delta IS the actual value
 };
 
 /**
@@ -72,7 +73,7 @@ struct PartitionMetadata {
  *   - Deltas may span word boundaries (require 2-word read)
  */
 template<typename T>
-struct CompressedDataGLECO {
+struct CompressedDataL3 {
     // Metadata
     int32_t num_partitions;      // Number of partitions
     int32_t total_values;        // Total elements in original data
@@ -98,10 +99,10 @@ struct CompressedDataGLECO {
     T* d_partition_max_values;   // [num_partitions] Maximum actual value in partition
 
     // Self-reference for device-side use
-    CompressedDataGLECO<T>* d_self;
+    CompressedDataL3<T>* d_self;
 
     // Constructor
-    CompressedDataGLECO()
+    CompressedDataL3()
         : num_partitions(0), total_values(0),
           d_start_indices(nullptr), d_end_indices(nullptr),
           d_model_types(nullptr), d_model_params(nullptr),
@@ -157,7 +158,7 @@ struct CompressionConfig {
  * Versioning and Compatibility
  *
  * When changing format:
- * 1. Bump GLECO_FORMAT_VERSION
+ * 1. Bump L3_FORMAT_VERSION
  * 2. Document change in docs/FORMAT.md
  * 3. Add backward compatibility decode if possible
  * 4. Update both encoder and decoder
@@ -165,9 +166,9 @@ struct CompressionConfig {
  */
 
 // Serialization header (for file storage)
-struct GLECOSerializedHeader {
-    uint32_t magic;           // GLECO_MAGIC
-    uint32_t format_version;  // GLECO_FORMAT_VERSION
+struct L3SerializedHeader {
+    uint32_t magic;           // L3_MAGIC
+    uint32_t format_version;  // L3_FORMAT_VERSION
     uint32_t element_size;    // sizeof(T)
     uint32_t num_partitions;
     int32_t  total_values;
@@ -175,4 +176,18 @@ struct GLECOSerializedHeader {
     uint64_t checksum;        // CRC32 or similar (optional)
 };
 
-#endif // GLECO_FORMAT_HPP
+/**
+ * Partition info structure for encoder output
+ * This describes a single partition with its fitted model and compression parameters
+ */
+struct PartitionInfo {
+    int32_t start_idx;           // Start index (inclusive)
+    int32_t end_idx;             // End index (exclusive)
+    int32_t model_type;          // Model type (MODEL_LINEAR, etc.)
+    double model_params[4];      // Model parameters: θ₀, θ₁, θ₂, θ₃
+    int32_t delta_bits;          // Bits per delta for this partition
+    int64_t delta_array_bit_offset;  // Bit offset into delta array
+    int64_t error_bound;         // Maximum absolute error in this partition
+};
+
+#endif // L3_FORMAT_HPP

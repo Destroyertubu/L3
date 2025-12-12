@@ -4,7 +4,7 @@
 #include "L3_alex_index.cuh"
 #include <cuda_runtime.h>
 
-// Random Access Helper Functions for GLECO Compressed Data
+// Random Access Helper Functions for L3 Compressed Data
 
 // ============================================================================
 // Configuration: Choose partition lookup method
@@ -26,7 +26,7 @@
  */
 template<typename T>
 __device__ __forceinline__ int findPartitionBinarySearch(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     int global_idx)
 {
     int left = 0, right = compressed->num_partitions - 1;
@@ -61,7 +61,7 @@ __device__ __forceinline__ int findPartitionBinarySearch(
  */
 template<typename T>
 __device__ __forceinline__ int findPartitionLearned(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     int global_idx)
 {
     // Linear model prediction
@@ -98,7 +98,7 @@ __device__ __forceinline__ int findPartitionLearned(
  */
 template<typename T>
 __device__ __forceinline__ int findPartition(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     int global_idx)
 {
 #if USE_LEARNED_INDEX
@@ -155,7 +155,7 @@ __device__ __forceinline__ long long extractDelta_Device(
  */
 template<typename T>
 __device__ __forceinline__ T randomAccessDecompress(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     int global_idx)
 {
     // Find partition
@@ -220,7 +220,7 @@ struct PartitionMeta {
  */
 template<typename T>
 __device__ __forceinline__ void loadPartitionMeta(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     int partition_idx,
     PartitionMeta& meta)
 {
@@ -237,7 +237,7 @@ __device__ __forceinline__ void loadPartitionMeta(
  */
 template<typename T>
 __device__ __forceinline__ T decompressWithMeta(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     int global_idx,
     const PartitionMeta& meta)
 {

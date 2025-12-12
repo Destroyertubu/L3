@@ -1,13 +1,13 @@
-# GLECO Examples
+# L3 Examples
 
-This directory contains example code demonstrating how to use GLECO.
+This directory contains example code demonstrating how to use L3.
 
 ## Examples
 
 1. **basic_compression.cpp** - Simple compression and decompression
 2. **random_access_query.cu** - GPU random access example
 3. **predicate_pushdown.cpp** - Partition pruning with predicates
-4. **custom_query.cu** - Custom CUDA kernel with GLECO data
+4. **custom_query.cu** - Custom CUDA kernel with L3 data
 
 ## Building Examples
 
@@ -37,7 +37,7 @@ make
 
 Demonstrates:
 - Loading data from file
-- Compressing with GLECO
+- Compressing with L3
 - Decompressing to verify correctness
 - Printing compression statistics
 
@@ -61,6 +61,6 @@ Demonstrates:
 
 Demonstrates:
 - Writing custom CUDA kernels
-- Using GLECO random access API
+- Using L3 random access API
 - Multi-column processing
 - Result aggregation

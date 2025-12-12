@@ -1,5 +1,5 @@
 /**
- * Variable-Length Encoder for GLECO
+ * Variable-Length Encoder for L3
  *
  * Implements adaptive partitioning based on data variance.
  * Extracted and adapted from L32.cu
@@ -124,12 +124,19 @@ __global__ void analyzeDataVarianceFast(
             sum_sq = t2;
         }
 
-        sum = warpReduceSum(sum);
-        sum_sq = warpReduceSum(sum_sq);
+        // Use block-level reduction to get correct variance
+        // Note: Var(X∪Y) ≠ Var(X) + Var(Y), so we must reduce sum and sum_sq
+        // across the entire block before computing variance
+        sum = blockReduceSum(sum);
+        sum_sq = blockReduceSum(sum_sq);
 
-        if ((threadIdx.x & 31) == 0) {
-            atomicAdd(&variances[bid], static_cast<float>(sum_sq / n - (sum / n) * (sum / n)));
+        // Only thread 0 has the correct total sum and sum_sq
+        if (threadIdx.x == 0) {
+            double mean = sum / n;
+            double variance = sum_sq / n - mean * mean;
+            variances[bid] = static_cast<float>(variance);
         }
+        __syncthreads();  // Ensure all threads sync before next iteration
     }
 }
 
@@ -322,13 +329,16 @@ __global__ void fitPartitionsBatched_Optimized(
     }
     __syncthreads();
 
-    double theta0 = theta0_array[pid];
-    double theta1 = theta1_array[pid];
+    // Use shared memory directly instead of reading back from global memory
+    // This avoids potential memory coherency issues
+    double theta0 = s_theta0;
+    double theta1 = s_theta1;
     long long local_max_error = 0;
 
     for (int i = threadIdx.x; i < n; i += blockDim.x) {
         double predicted = fma(theta1, static_cast<double>(i), theta0);
-        T pred_T = static_cast<T>(round(predicted));
+        // Use __double2ll_rn for consistency with decoder (banker's rounding)
+        T pred_T = static_cast<T>(__double2ll_rn(predicted));
         long long delta = calculateDelta(data[start + i], pred_T);
         local_max_error = max(local_max_error, llabs(delta));
     }
@@ -357,11 +367,86 @@ template<typename T>
 class GPUVariableLengthPartitionerV6 {
 private:
     T* d_data;
+    const std::vector<T>& h_data_ref;  // Reference to host data for refit
     int data_size;
     int base_partition_size;
     cudaStream_t stream;
     int variance_block_multiplier;
     int num_thresholds;
+
+    // Host-side refit for a partition with adjusted boundaries
+    void refitPartition(PartitionInfo& info) {
+        int start = info.start_idx;
+        int end = info.end_idx;
+        int n = end - start;
+
+        if (n <= 0) return;
+
+        // Check for overflow values
+        bool has_overflow = false;
+        for (int i = 0; i < n; i++) {
+            if (mightOverflowDoublePrecision(h_data_ref[start + i])) {
+                has_overflow = true;
+                break;
+            }
+        }
+
+        if (has_overflow) {
+            info.model_type = MODEL_DIRECT_COPY;
+            info.model_params[0] = 0.0;
+            info.model_params[1] = 0.0;
+            info.delta_bits = sizeof(T) * 8;
+            info.error_bound = 0;
+            return;
+        }
+
+        // Linear regression
+        double sum_x = 0.0, sum_y = 0.0, sum_xx = 0.0, sum_xy = 0.0;
+        for (int i = 0; i < n; i++) {
+            double x = static_cast<double>(i);
+            double y = static_cast<double>(h_data_ref[start + i]);
+            sum_x += x;
+            sum_y += y;
+            sum_xx += x * x;
+            sum_xy += x * y;
+        }
+
+        double dn = static_cast<double>(n);
+        double determinant = dn * sum_xx - sum_x * sum_x;
+
+        double theta0, theta1;
+        if (std::fabs(determinant) > 1e-10) {
+            theta1 = (dn * sum_xy - sum_x * sum_y) / determinant;
+            theta0 = (sum_y - theta1 * sum_x) / dn;
+        } else {
+            theta1 = 0.0;
+            theta0 = sum_y / dn;
+        }
+
+        info.model_type = MODEL_LINEAR;
+        info.model_params[0] = theta0;
+        info.model_params[1] = theta1;
+
+        // Calculate max error
+        // Use std::llrint for consistency with GPU's __double2ll_rn (banker's rounding)
+        long long max_error = 0;
+        for (int i = 0; i < n; i++) {
+            double predicted = theta0 + theta1 * i;
+            T pred_T = static_cast<T>(std::llrint(predicted));
+            long long delta = calculateDelta(h_data_ref[start + i], pred_T);
+            long long abs_error = (delta < 0) ? -delta : delta;
+            if (abs_error > max_error) max_error = abs_error;
+        }
+
+        info.error_bound = max_error;
+
+        // Calculate delta bits
+        int delta_bits = 0;
+        if (max_error > 0) {
+            delta_bits = 64 - __builtin_clzll(static_cast<unsigned long long>(max_error)) + 1;
+        }
+        info.delta_bits = delta_bits;
+    }
 
 public:
     GPUVariableLengthPartitionerV6(const std::vector<T>& data,
@@ -369,7 +454,8 @@ public:
                                    cudaStream_t cuda_stream = 0,
                                    int multiplier = 8,
                                    int thresholds = 3)
-        : data_size(data.size()),
+        : h_data_ref(data),
+          data_size(data.size()),
           base_partition_size(base_size),
           stream(cuda_stream),
           variance_block_multiplier(multiplier),
@@ -381,6 +467,8 @@ public:
         cudaMalloc(&d_data, data_size * sizeof(T));
         cudaMemcpyAsync(d_data, data.data(), data_size * sizeof(T),
                        cudaMemcpyHostToDevice, stream);
+        // CRITICAL: Ensure data is fully copied before any kernel uses it
+        cudaStreamSynchronize(stream);
     }
 
     ~GPUVariableLengthPartitionerV6() {
@@ -409,27 +497,94 @@ public:
         analyzeDataVarianceFast<T><<<blocks, threads, 0, stream>>>(
             d_data, data_size, variance_block_size, d_variances, num_variance_blocks);
 
-        thrust::device_ptr<float> var_ptr(d_variances);
-        if (num_variance_blocks > 1) {
-           thrust::sort(var_ptr, var_ptr + num_variance_blocks);
-        }
+        // Create a COPY of variances for sorting to find thresholds
+        // We MUST preserve the original d_variances for later use in partition creation
+        float* d_variances_sorted;
+        cudaMalloc(&d_variances_sorted, num_variance_blocks * sizeof(float));
+        cudaMemcpyAsync(d_variances_sorted, d_variances,
+                       num_variance_blocks * sizeof(float), cudaMemcpyDeviceToDevice, stream);
+
+        thrust::device_ptr<float> sorted_var_ptr(d_variances_sorted);
 
         std::vector<float> h_thresholds(num_thresholds);
-        for (int i = 0; i < num_thresholds; ++i) {
-            long long idx = (long long)(i + 1) * num_variance_blocks / (num_thresholds + 1);
-            if (idx >= num_variance_blocks) idx = num_variance_blocks - 1;
-            if (idx < 0) idx = 0;
-            h_thresholds[i] = (num_variance_blocks > 0) ? var_ptr[idx] : 0.0f;
+
+        // For small arrays, full sort is efficient enough
+        // For larger arrays, we could use sampling or partial sort
+        // Threshold: 100k elements (full sort is O(n log n), sampling is O(n + k log k))
+        constexpr int FULL_SORT_THRESHOLD = 100000;
+
+        if (num_variance_blocks > 1) {
+            if (num_variance_blocks <= FULL_SORT_THRESHOLD) {
+                // Full sort for small arrays - simple and efficient
+                thrust::sort(sorted_var_ptr, sorted_var_ptr + num_variance_blocks);
+
+                for (int i = 0; i < num_thresholds; ++i) {
+                    long long idx = (long long)(i + 1) * num_variance_blocks / (num_thresholds + 1);
+                    if (idx >= num_variance_blocks) idx = num_variance_blocks - 1;
+                    if (idx < 0) idx = 0;
+                    h_thresholds[i] = sorted_var_ptr[idx];
+                }
+            } else {
+                // For larger arrays, use sampling-based approximation
+                // Sample ~10k elements, sort sample, interpolate thresholds
+                const int SAMPLE_SIZE = 10000;
+                std::vector<float> h_sample(SAMPLE_SIZE);
+
+                // Copy evenly spaced samples to host
+                int stride = num_variance_blocks / SAMPLE_SIZE;
+                std::vector<int> sample_indices(SAMPLE_SIZE);
+                for (int i = 0; i < SAMPLE_SIZE; ++i) {
+                    sample_indices[i] = i * stride;
+                }
+
+                // Copy samples
+                std::vector<float> h_all_variances(num_variance_blocks);
+                cudaMemcpy(h_all_variances.data(), d_variances_sorted,
+                          num_variance_blocks * sizeof(float), cudaMemcpyDeviceToHost);
+
+                for (int i = 0; i < SAMPLE_SIZE; ++i) {
+                    h_sample[i] = h_all_variances[sample_indices[i]];
+                }
+
+                // Sort sample on CPU (small, fast)
+                std::sort(h_sample.begin(), h_sample.end());
+
+                // Extract thresholds from sorted sample
+                for (int i = 0; i < num_thresholds; ++i) {
+                    long long idx = (long long)(i + 1) * SAMPLE_SIZE / (num_thresholds + 1);
+                    if (idx >= SAMPLE_SIZE) idx = SAMPLE_SIZE - 1;
+                    if (idx < 0) idx = 0;
+                    h_thresholds[i] = h_sample[idx];
+                }
+            }
+        } else {
+            for (int i = 0; i < num_thresholds; ++i) {
+                h_thresholds[i] = 0.0f;
+            }
         }
+
+        // Free the sorted copy - we no longer need it
+        cudaFree(d_variances_sorted);
 
         cudaMemcpyAsync(d_variance_thresholds, h_thresholds.data(),
                        num_thresholds * sizeof(float), cudaMemcpyHostToDevice, stream);
 
+        // Partition sizes for each variance bucket:
+        // Low variance -> larger partitions (better compression)
+        // High variance -> smaller partitions (adapt faster to changes)
+        // Bucket 0 = lowest variance (largest partition)
+        // Bucket num_thresholds = highest variance (smallest partition)
         std::vector<int> h_partition_sizes_for_buckets(num_thresholds + 1);
         int min_partition_size_val = base_partition_size;
         for (int i = 0; i <= num_thresholds; ++i) {
             int shift = (num_thresholds / 2) - i;
-            h_partition_sizes_for_buckets[i] = std::max(MIN_PARTITION_SIZE, base_partition_size << shift);
+            int size;
+            if (shift >= 0) {
+                size = base_partition_size << shift;  // Larger partitions for low variance
+            } else {
+                size = base_partition_size >> (-shift);  // Smaller partitions for high variance
+            }
+            h_partition_sizes_for_buckets[i] = std::max(MIN_PARTITION_SIZE, size);
             if (h_partition_sizes_for_buckets[i] < min_partition_size_val) {
                 min_partition_size_val = h_partition_sizes_for_buckets[i];
             }
@@ -477,10 +632,17 @@ public:
         cudaStreamSynchronize(stream);
         h_num_partitions += h_last_count;
 
+        // Handle case where actual partition count exceeds estimate
+        // Instead of truncating (which loses data), reallocate with correct size
         if (h_num_partitions > estimated_partitions) {
-            std::cerr << "Warning: Partition count " << h_num_partitions
-                      << " exceeds estimate " << estimated_partitions << std::endl;
-            h_num_partitions = estimated_partitions;
+            // Reallocate with actual size plus some margin
+            int new_size = h_num_partitions + h_num_partitions / 10 + 1;  // 10% margin
+
+            cudaFree(d_partition_starts);
+            cudaFree(d_partition_ends);
+            cudaMalloc(&d_partition_starts, new_size * sizeof(int));
+            cudaMalloc(&d_partition_ends, new_size * sizeof(int));
+            estimated_partitions = new_size;
         }
 
         writePartitionsOrdered<T><<<blocks, threads, 0, stream>>>(
@@ -489,6 +651,9 @@ public:
             d_partition_starts, d_partition_ends,
             d_variance_thresholds, d_partition_sizes_for_buckets,
             num_thresholds, variance_block_multiplier);
+
+        // CRITICAL: Synchronize before freeing offsets and before using partition starts/ends
+        cudaStreamSynchronize(stream);
 
         cudaFree(d_partition_counts);
         cudaFree(d_partition_offsets);
@@ -570,17 +735,41 @@ public:
         }
 
         if (!result.empty()) {
+            // Store original boundaries for comparison
+            std::vector<int> orig_starts(result.size());
+            std::vector<int> orig_ends(result.size());
+            for (size_t i = 0; i < result.size(); i++) {
+                orig_starts[i] = result[i].start_idx;
+                orig_ends[i] = result[i].end_idx;
+            }
+
             std::sort(result.begin(), result.end(),
                      [](const PartitionInfo& a, const PartitionInfo& b) {
                          return a.start_idx < b.start_idx;
                      });
 
+            // Adjust boundaries to ensure complete coverage
+            bool first_adjusted = (result[0].start_idx != 0);
             result[0].start_idx = 0;
+
+            bool last_adjusted = (result.back().end_idx != data_size);
             result.back().end_idx = data_size;
+
+            std::vector<bool> needs_refit(result.size(), false);
+            if (first_adjusted) needs_refit[0] = true;
+            if (last_adjusted) needs_refit[result.size() - 1] = true;
 
             for (size_t i = 0; i < result.size() - 1; i++) {
                 if (result[i].end_idx != result[i + 1].start_idx) {
                     result[i].end_idx = result[i + 1].start_idx;
+                    needs_refit[i] = true;
+                }
+            }
+
+            // Refit any partitions whose boundaries changed
+            for (size_t i = 0; i < result.size(); i++) {
+                if (needs_refit[i]) {
+                    refitPartition(result[i]);
                 }
             }
         }

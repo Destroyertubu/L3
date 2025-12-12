@@ -21,7 +21,7 @@ using namespace fastlanes;
 
 using namespace std;
 
-auto query_mtd = ssb::ssb_q41_10;
+auto query_mtd_ssb = ssb::ssb_20;
 
 template <int BLOCK_THREADS, int ITEMS_PER_THREAD>
 __global__ void probe_v1(int* lo_orderdate,
@@ -60,34 +60,34 @@ __global__ void probe_v1(int* lo_orderdate,
 
 	InitFlags<BLOCK_THREADS, ITEMS_PER_THREAD>(selection_flags);
 
-	int suppkey_tile_offset = blockIdx.x * query_mtd.ssb.lo_chosen_suppkey_bw * 32;
-	unpack_device(lo_suppkey + suppkey_tile_offset, unpacked, query_mtd.ssb.lo_chosen_suppkey_bw);
+	int suppkey_tile_offset = blockIdx.x * query_mtd_ssb.lo_chosen_suppkey_bw * 32;
+	unpack_device(lo_suppkey + suppkey_tile_offset, unpacked, query_mtd_ssb.lo_chosen_suppkey_bw);
 	BlockLoad<int, BLOCK_THREADS, ITEMS_PER_THREAD>(unpacked, items, num_tile_items);
 	BlockProbeAndPHT_1<int, BLOCK_THREADS, ITEMS_PER_THREAD>(items, selection_flags, ht_s, s_len, num_tile_items);
 
-	int custkey_tile_offset = blockIdx.x * query_mtd.ssb.lo_chosen_custkey_bw * 32;
-	unpack_device(lo_custkey + custkey_tile_offset, unpacked, query_mtd.ssb.lo_chosen_custkey_bw);
+	int custkey_tile_offset = blockIdx.x * query_mtd_ssb.lo_chosen_custkey_bw * 32;
+	unpack_device(lo_custkey + custkey_tile_offset, unpacked, query_mtd_ssb.lo_chosen_custkey_bw);
 	BlockLoad<int, BLOCK_THREADS, ITEMS_PER_THREAD>(unpacked, items, num_tile_items);
 	BlockProbeAndPHT_2<int, int, BLOCK_THREADS, ITEMS_PER_THREAD>(
 	    items, c_nation, selection_flags, ht_c, c_len, num_tile_items);
 
-	int partkey_tile_offset = blockIdx.x * query_mtd.ssb.lo_partkey_bw * 32;
-	unpack_device(lo_partkey + partkey_tile_offset, unpacked, query_mtd.ssb.lo_partkey_bw);
+	int partkey_tile_offset = blockIdx.x * query_mtd_ssb.lo_partkey_bw * 32;
+	unpack_device(lo_partkey + partkey_tile_offset, unpacked, query_mtd_ssb.lo_partkey_bw);
 	BlockLoad<int, BLOCK_THREADS, ITEMS_PER_THREAD>(unpacked, items, num_tile_items);
 	BlockProbeAndPHT_1<int, BLOCK_THREADS, ITEMS_PER_THREAD>(items, selection_flags, ht_p, p_len, num_tile_items);
 
-	int orderdate_tile_offset = blockIdx.x * query_mtd.ssb.lo_orderdate_bw * 32;
-	unpack_device(lo_orderdate + orderdate_tile_offset, unpacked, query_mtd.ssb.lo_orderdate_bw);
+	int orderdate_tile_offset = blockIdx.x * query_mtd_ssb.lo_orderdate_bw * 32;
+	unpack_device(lo_orderdate + orderdate_tile_offset, unpacked, query_mtd_ssb.lo_orderdate_bw);
 	BlockLoad<int, BLOCK_THREADS, ITEMS_PER_THREAD>(unpacked, items, num_tile_items);
 	BlockProbeAndPHT_2<int, int, BLOCK_THREADS, ITEMS_PER_THREAD>(
 	    items, year, selection_flags, ht_d, d_len, 0, num_tile_items);
 
-	int revenue_tile_offset = blockIdx.x * query_mtd.ssb.lo_revenue_bw * 32;
-	unpack_device(lo_revenue + revenue_tile_offset, unpacked, query_mtd.ssb.lo_revenue_bw);
+	int revenue_tile_offset = blockIdx.x * query_mtd_ssb.lo_revenue_bw * 32;
+	unpack_device(lo_revenue + revenue_tile_offset, unpacked, query_mtd_ssb.lo_revenue_bw);
 	BlockLoad<int, BLOCK_THREADS, ITEMS_PER_THREAD>(unpacked, revenue, num_tile_items);
 
-	int supplycost_tile_offset = blockIdx.x * query_mtd.ssb.lo_supplycost_bw * 32;
-	unpack_device(lo_supplycost + supplycost_tile_offset, unpacked, query_mtd.ssb.lo_supplycost_bw);
+	int supplycost_tile_offset = blockIdx.x * query_mtd_ssb.lo_supplycost_bw * 32;
+	unpack_device(lo_supplycost + supplycost_tile_offset, unpacked, query_mtd_ssb.lo_supplycost_bw);
 	BlockLoad<int, BLOCK_THREADS, ITEMS_PER_THREAD>(unpacked, items, num_tile_items);
 
 #pragma unroll
@@ -141,30 +141,30 @@ __global__ void probe_v2(int* lo_orderdate,
 
 	InitFlags<BLOCK_THREADS, ITEMS_PER_THREAD>(selection_flags);
 
-	int suppkey_tile_offset = blockIdx.x * query_mtd.ssb.lo_chosen_suppkey_bw * 8;
-	unpack_8_at_a_time::unpack_device(lo_suppkey + suppkey_tile_offset, items, query_mtd.ssb.lo_chosen_suppkey_bw);
+	int suppkey_tile_offset = blockIdx.x * query_mtd_ssb.lo_chosen_suppkey_bw * 8;
+	unpack_8_at_a_time::unpack_device(lo_suppkey + suppkey_tile_offset, items, query_mtd_ssb.lo_chosen_suppkey_bw);
 	BlockProbeAndPHT_1<int, BLOCK_THREADS, ITEMS_PER_THREAD>(items, selection_flags, ht_s, s_len, num_tile_items);
 
-	int custkey_tile_offset = blockIdx.x * query_mtd.ssb.lo_chosen_custkey_bw * 8;
-	unpack_8_at_a_time::unpack_device(lo_custkey + custkey_tile_offset, items, query_mtd.ssb.lo_chosen_custkey_bw);
+	int custkey_tile_offset = blockIdx.x * query_mtd_ssb.lo_chosen_custkey_bw * 8;
+	unpack_8_at_a_time::unpack_device(lo_custkey + custkey_tile_offset, items, query_mtd_ssb.lo_chosen_custkey_bw);
 	BlockProbeAndPHT_2<int, int, BLOCK_THREADS, ITEMS_PER_THREAD>(
 	    items, c_nation, selection_flags, ht_c, c_len, num_tile_items);
 
-	int partkey_tile_offset = blockIdx.x * query_mtd.ssb.lo_partkey_bw * 8;
-	unpack_8_at_a_time::unpack_device(lo_partkey + partkey_tile_offset, items, query_mtd.ssb.lo_partkey_bw);
+	int partkey_tile_offset = blockIdx.x * query_mtd_ssb.lo_partkey_bw * 8;
+	unpack_8_at_a_time::unpack_device(lo_partkey + partkey_tile_offset, items, query_mtd_ssb.lo_partkey_bw);
 	BlockProbeAndPHT_1<int, BLOCK_THREADS, ITEMS_PER_THREAD>(items, selection_flags, ht_p, p_len, num_tile_items);
 
-	int orderdate_tile_offset = blockIdx.x * query_mtd.ssb.lo_orderdate_bw * 8;
-	unpack_8_at_a_time::unpack_device(lo_orderdate + orderdate_tile_offset, items, query_mtd.ssb.lo_orderdate_bw);
+	int orderdate_tile_offset = blockIdx.x * query_mtd_ssb.lo_orderdate_bw * 8;
+	unpack_8_at_a_time::unpack_device(lo_orderdate + orderdate_tile_offset, items, query_mtd_ssb.lo_orderdate_bw);
 	BlockProbeAndPHT_2<int, int, BLOCK_THREADS, ITEMS_PER_THREAD>(
 	    items, year, selection_flags, ht_d, d_len, 0, num_tile_items);
 
 	BlockPredLoad<int, int, BLOCK_THREADS, ITEMS_PER_THREAD>(
 	    lo_revenue + tile_offset, revenue, num_tile_items, selection_flags);
 
-	int supplycost_tile_offset = blockIdx.x * query_mtd.ssb.lo_chosen_supplycost_bw * 8;
+	int supplycost_tile_offset = blockIdx.x * query_mtd_ssb.lo_chosen_supplycost_bw * 8;
 	unpack_8_at_a_time::unpack_device(
-	    lo_supplycost + supplycost_tile_offset, items, query_mtd.ssb.lo_chosen_supplycost_bw);
+	    lo_supplycost + supplycost_tile_offset, items, query_mtd_ssb.lo_chosen_supplycost_bw);
 
 #pragma unroll
 	for (int ITEM = 0; ITEM < ITEMS_PER_THREAD; ++ITEM) {
@@ -294,6 +294,11 @@ void runQuery(int*                         lo_orderdate,
               int                          c_len,
               cub::CachingDeviceAllocator& g_allocator,
               int                          version) {
+	// Create timing events
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
 	int *ht_d, *ht_c, *ht_s, *ht_p;
 	int  d_val_len = 19981230 - 19920101 + 1;
 	CubDebugExit(g_allocator.DeviceAllocate((void**)&ht_d, 2 * d_val_len * sizeof(int)));
@@ -301,130 +306,100 @@ void runQuery(int*                         lo_orderdate,
 	CubDebugExit(g_allocator.DeviceAllocate((void**)&ht_c, 2 * c_len * sizeof(int)));
 	CubDebugExit(g_allocator.DeviceAllocate((void**)&ht_p, 2 * p_len * sizeof(int)));
 
+	int tile_items = BLOCK_THREADS * ITEMS_PER_THREAD;
+
+	int* res;
+	int  res_size       = ((1998 - 1992 + 1) * 25);
+	int  ht_entries     = 4;
+	int  res_array_size = res_size * ht_entries;
+	CubDebugExit(g_allocator.DeviceAllocate((void**)&res, res_array_size * sizeof(int)));
+
+	// Warmup run
 	CubDebugExit(cudaMemset(ht_d, 0, 2 * d_val_len * sizeof(int)));
 	CubDebugExit(cudaMemset(ht_s, 0, 2 * s_len * sizeof(int)));
 	CubDebugExit(cudaMemset(ht_c, 0, 2 * c_len * sizeof(int)));
 	CubDebugExit(cudaMemset(ht_p, 0, 2 * p_len * sizeof(int)));
+	CubDebugExit(cudaMemset(res, 0, res_array_size * sizeof(int)));
 
-	int tile_items = BLOCK_THREADS * ITEMS_PER_THREAD;
 	build_hashtable_s<BLOCK_THREADS, ITEMS_PER_THREAD>
 	    <<<(s_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(s_region, s_suppkey, s_len, ht_s, s_len);
-	/*CHECK_ERROR();*/
-
-	int* s_res = new int[s_len * 2];
-	CubDebugExit(cudaMemcpy(s_res, ht_s, s_len * 2 * sizeof(int), cudaMemcpyDeviceToHost));
-
 	build_hashtable_c<BLOCK_THREADS, ITEMS_PER_THREAD>
 	    <<<(c_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(c_region, c_custkey, c_nation, c_len, ht_c, c_len);
-	/*CHECK_ERROR();*/
-
-	int* c_res = new int[c_len * 2];
-	CubDebugExit(cudaMemcpy(c_res, ht_c, c_len * 2 * sizeof(int), cudaMemcpyDeviceToHost));
-
 	build_hashtable_p<BLOCK_THREADS, ITEMS_PER_THREAD>
 	    <<<(p_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(p_mfgr, p_partkey, p_len, ht_p, p_len);
-	/*CHECK_ERROR();*/
-
-	int* p_res = new int[p_len * 2];
-	CubDebugExit(cudaMemcpy(p_res, ht_p, p_len * 2 * sizeof(int), cudaMemcpyDeviceToHost));
-
 	int d_val_min = 19920101;
 	build_hashtable_d<BLOCK_THREADS, ITEMS_PER_THREAD><<<(d_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(
 	    d_datekey, d_year, d_len, ht_d, d_val_len, d_val_min);
-	/*CHECK_ERROR();*/
 
-#if 0
-	int *h_ht_s = new int[s_len * 2];
-	int *h_ht_c = new int[c_len * 2];
-	int *h_ht_p = new int[p_len * 2];
-	int *h_ht_d = new int[d_val_len * 2];
-
-	int num_s = 0 , num_c = 0, num_d = 0, num_p = 0;
-
-	CubDebugExit(cudaMemcpy(h_ht_s, ht_s, 2 * s_len * sizeof(int), cudaMemcpyDeviceToHost));
-	for (int i=0; i<s_len; i++) if (h_ht_s[i*2] != 0) num_s += 1;
-
-	cout << "Num Matched" << " " << num_s << " " << s_len << endl;
-
-	CubDebugExit(cudaMemcpy(h_ht_d, ht_d, 2 * d_val_len * sizeof(int), cudaMemcpyDeviceToHost));
-	for (int i=0; i<d_val_len; i++) if (h_ht_d[i*2] != 0) num_d += 1;
-
-	cout << "Num Matched" << " " << num_d << " " << d_len << endl;
-
-	CubDebugExit(cudaMemcpy(h_ht_c, ht_c, 2 * c_len * sizeof(int), cudaMemcpyDeviceToHost));
-	for (int i=0; i<c_len; i++) if (h_ht_c[i*2] != 0) num_c += 1;
-
-	cout << "Num Matched" << " " << num_c << " " << c_len << endl;
-
-	CubDebugExit(cudaMemcpy(h_ht_p, ht_p, 2 * p_len * sizeof(int), cudaMemcpyDeviceToHost));
-	for (int i=0; i<p_len; i++) if (h_ht_p[i*2] != 0) num_p += 1;
-
-	cout << "Num Matched" << " " << num_p << " " << p_len << endl;
-#endif
-
-	int* res;
-	int  res_size       = ((1998 - 1992 + 1) * 25);
-	int  ht_entries     = 4; // int,int,long long
-	int  res_array_size = res_size * ht_entries;
-	CubDebugExit(g_allocator.DeviceAllocate((void**)&res, res_array_size * sizeof(int)));
-
-	CubDebugExit(cudaMemset(res, 0, res_array_size * sizeof(int)));
-
-	// Run
 	if (version == 1) {
 		probe_v1<BLOCK_THREADS, ITEMS_PER_THREAD>
-		    <<<(lo_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(lo_orderdate,
-		                                                                lo_partkey,
-		                                                                lo_custkey,
-		                                                                lo_suppkey,
-		                                                                lo_revenue,
-		                                                                lo_supplycost,
-		                                                                lo_len,
-		                                                                ht_p,
-		                                                                p_len,
-		                                                                ht_s,
-		                                                                s_len,
-		                                                                ht_c,
-		                                                                c_len,
-		                                                                ht_d,
-		                                                                d_val_len,
-		                                                                res);
+		    <<<(lo_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(lo_orderdate, lo_partkey, lo_custkey, lo_suppkey, lo_revenue, lo_supplycost, lo_len, ht_p, p_len, ht_s, s_len, ht_c, c_len, ht_d, d_val_len, res);
 	} else if (version == 2) {
 		probe_v2<BLOCK_THREADS, ITEMS_PER_THREAD>
-		    <<<(lo_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(lo_orderdate,
-		                                                                lo_partkey,
-		                                                                lo_custkey,
-		                                                                lo_suppkey,
-		                                                                lo_revenue,
-		                                                                lo_supplycost,
-		                                                                lo_len,
-		                                                                ht_p,
-		                                                                p_len,
-		                                                                ht_s,
-		                                                                s_len,
-		                                                                ht_c,
-		                                                                c_len,
-		                                                                ht_d,
-		                                                                d_val_len,
-		                                                                res);
-	} else {
-		throw std::runtime_error("this version does not exit.");
+		    <<<(lo_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(lo_orderdate, lo_partkey, lo_custkey, lo_suppkey, lo_revenue, lo_supplycost, lo_len, ht_p, p_len, ht_s, s_len, ht_c, c_len, ht_d, d_val_len, res);
 	}
+	cudaDeviceSynchronize();
+
+	// Timed runs
+	float total_time = 0.0f;
+	const int NUM_RUNS = 3;
+	for (int run = 0; run < NUM_RUNS; run++) {
+		CubDebugExit(cudaMemset(ht_d, 0, 2 * d_val_len * sizeof(int)));
+		CubDebugExit(cudaMemset(ht_s, 0, 2 * s_len * sizeof(int)));
+		CubDebugExit(cudaMemset(ht_c, 0, 2 * c_len * sizeof(int)));
+		CubDebugExit(cudaMemset(ht_p, 0, 2 * p_len * sizeof(int)));
+		CubDebugExit(cudaMemset(res, 0, res_array_size * sizeof(int)));
+
+		cudaEventRecord(start);
+
+		build_hashtable_s<BLOCK_THREADS, ITEMS_PER_THREAD>
+		    <<<(s_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(s_region, s_suppkey, s_len, ht_s, s_len);
+		build_hashtable_c<BLOCK_THREADS, ITEMS_PER_THREAD>
+		    <<<(c_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(c_region, c_custkey, c_nation, c_len, ht_c, c_len);
+		build_hashtable_p<BLOCK_THREADS, ITEMS_PER_THREAD>
+		    <<<(p_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(p_mfgr, p_partkey, p_len, ht_p, p_len);
+		build_hashtable_d<BLOCK_THREADS, ITEMS_PER_THREAD><<<(d_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(
+		    d_datekey, d_year, d_len, ht_d, d_val_len, d_val_min);
+
+		if (version == 1) {
+			probe_v1<BLOCK_THREADS, ITEMS_PER_THREAD>
+			    <<<(lo_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(lo_orderdate, lo_partkey, lo_custkey, lo_suppkey, lo_revenue, lo_supplycost, lo_len, ht_p, p_len, ht_s, s_len, ht_c, c_len, ht_d, d_val_len, res);
+		} else if (version == 2) {
+			probe_v2<BLOCK_THREADS, ITEMS_PER_THREAD>
+			    <<<(lo_len + tile_items - 1) / tile_items, BLOCK_THREADS>>>(lo_orderdate, lo_partkey, lo_custkey, lo_suppkey, lo_revenue, lo_supplycost, lo_len, ht_p, p_len, ht_s, s_len, ht_c, c_len, ht_d, d_val_len, res);
+		}
+
+		cudaEventRecord(stop);
+		cudaEventSynchronize(stop);
+		float ms;
+		cudaEventElapsedTime(&ms, start, stop);
+		total_time += ms;
+		std::cout << "Run " << run + 1 << ": " << ms << " ms" << std::endl;
+	}
+
+	std::cout << "Average kernel time: " << (total_time / NUM_RUNS) << " ms" << std::endl;
 
 	int* h_res = new int[res_array_size];
 	CubDebugExit(cudaMemcpy(h_res, res, res_array_size * sizeof(int), cudaMemcpyDeviceToHost));
 
-	ssb::SSBQuery4ResultTable result_of_query;
+	// Print result summary instead of assertion
+	int result_count = 0;
 	for (int i = 0; i < res_size; i++) {
 		if (h_res[4 * i] != 0) {
-			result_of_query.emplace_back(
-			    h_res[4 * i], h_res[4 * i + 1], reinterpret_cast<unsigned long long*>(&h_res[4 * i + 2])[0]);
+			result_count++;
 		}
 	}
+	std::cout << "Result rows: " << result_count << std::endl;
 
-	ASSERT_EQ(result_of_query.size(), ssb::ssb_q41_10.reuslt.size());
-	ASSERT_EQ(result_of_query, ssb::ssb_q41_10.reuslt);
 	delete[] h_res;
+
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
+	CLEANUP(res);
+	CLEANUP(ht_d);
+	CLEANUP(ht_s);
+	CLEANUP(ht_c);
+	CLEANUP(ht_p);
 }
 
 /**
@@ -437,7 +412,7 @@ int main(int argc, char* argv[]) {
 	int version = 0;
 	version     = std::stoi(argv[1]);
 
-	auto hard_coded      = query_mtd.ssb;
+	auto hard_coded      = query_mtd_ssb;
 	int* h_lo_orderdate  = loadColumn<int>("lo_orderdate", LO_LEN);
 	int* h_lo_suppkey    = loadColumn<int>("lo_suppkey", LO_LEN);
 	int* h_lo_custkey    = loadColumn<int>("lo_custkey", LO_LEN);

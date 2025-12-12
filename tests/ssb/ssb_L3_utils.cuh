@@ -1,5 +1,5 @@
-#ifndef SSB_GLECO_UTILS_CUH
-#define SSB_GLECO_UTILS_CUH
+#ifndef SSB_L3_UTILS_CUH
+#define SSB_L3_UTILS_CUH
 
 #include <cuda_runtime.h>
 #include <iostream>
@@ -108,4 +108,4 @@ __device__ inline long long extractDelta_Optimized(const uint32_t* __restrict__ 
     }
 }
 
-#endif // SSB_GLECO_UTILS_CUH
+#endif // SSB_L3_UTILS_CUH

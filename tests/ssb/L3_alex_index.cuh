@@ -52,7 +52,7 @@ struct PartitionLearnedIndex {
  *
  * NOTE: This function is provided for reference but not currently used
  * in the simplified GPU implementation which builds the model on-the-fly
- * from partition metadata already in CompressedDataGLECO structure.
+ * from partition metadata already in CompressedDataL3 structure.
  *
  * ALGORITHM:
  * 1. Fit linear model: partition_idx = slope * global_idx + intercept

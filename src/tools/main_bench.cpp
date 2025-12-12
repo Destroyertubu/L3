@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <random>
 #include <cuda_runtime.h>
-#include "L3_opt.h"
+#include "L3.h"
 
 // CUDA error checking
 #define CUDA_CHECK(call)                                                      \
@@ -128,7 +128,7 @@ struct BenchConfig {
 };
 
 int main(int argc, char** argv) {
-    std::cout << "GLECO Optimized Decompression Benchmark" << std::endl;
+    std::cout << "L3 Optimized Decompression Benchmark" << std::endl;
     std::cout << "=======================================" << std::endl;
 
     // Print GPU info

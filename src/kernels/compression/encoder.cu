@@ -1,11 +1,11 @@
 /**
- * GLECO Encoder Kernels
+ * L3 Encoder Kernels
  *
  * PORTED FROM: /root/autodl-tmp/code/data/SSB/L3/L32.cu
  * PORT DATE: 2025-10-14
  * STATUS: Semantic-preserving port (no algorithmic changes)
  *
- * This file contains the GPU kernels for GLECO compression:
+ * This file contains the GPU kernels for L3 compression:
  * - Model fitting (linear regression)
  * - Delta computation
  * - Bit packing
@@ -261,8 +261,9 @@ __global__ void wprocessPartitionsKernel(const T* values_device,
             }
 
             // Calculate delta for error tracking
+            // Use __double2ll_rn for consistency with decoder (banker's rounding)
             double predicted = theta0 + theta1 * i;
-            T pred_T = static_cast<T>(round(predicted));
+            T pred_T = static_cast<T>(__double2ll_rn(predicted));
             long long delta = calculateDelta(actual_value, pred_T);
             long long abs_error = (delta < 0) ? -delta : delta;
 
@@ -490,13 +491,98 @@ __global__ void packDeltasKernelOptimized(const T* values_device,
             // Normal delta encoding
             int current_local_idx = current_idx - current_start_idx;
 
-            double pred_double = d_model_params[found_partition_idx * 4] +
-                                d_model_params[found_partition_idx * 4 + 1] * current_local_idx;
-            if (current_model_type == MODEL_POLYNOMIAL2) {
-                pred_double += d_model_params[found_partition_idx * 4 + 2] * current_local_idx * current_local_idx;
+            // Compute prediction using polynomial model (Horner's method)
+            // Must use __double2ll_rn for banker's rounding - matches V2 partitioner
+            double x = static_cast<double>(current_local_idx);
+            double pred_double;
+
+            switch (current_model_type) {
+                case MODEL_POLYNOMIAL2:  // Horner: a0 + x*(a1 + x*a2)
+                    pred_double = d_model_params[found_partition_idx * 4] +
+                                  x * (d_model_params[found_partition_idx * 4 + 1] +
+                                       x * d_model_params[found_partition_idx * 4 + 2]);
+                    break;
+                case MODEL_POLYNOMIAL3:  // Horner: a0 + x*(a1 + x*(a2 + x*a3))
+                    pred_double = d_model_params[found_partition_idx * 4] +
+                                  x * (d_model_params[found_partition_idx * 4 + 1] +
+                                       x * (d_model_params[found_partition_idx * 4 + 2] +
+                                            x * d_model_params[found_partition_idx * 4 + 3]));
+                    break;
+                case MODEL_FOR_BITPACK: {
+                    // FOR (Frame of Reference): delta = value - base (UNSIGNED)
+                    // base is stored in theta0; for 64-bit types, it's stored as bit pattern
+                    T base;
+                    if constexpr (sizeof(T) == 8) {
+                        // 64-bit: base stored as bit pattern via __longlong_as_double
+                        base = static_cast<T>(__double_as_longlong(d_model_params[found_partition_idx * 4]));
+                    } else {
+                        // 32-bit: direct cast is fine
+                        base = static_cast<T>(d_model_params[found_partition_idx * 4]);
+                    }
+
+                    // FOR delta is UNSIGNED (value - base where base = min)
+                    uint64_t unsigned_delta = static_cast<uint64_t>(values_device[current_idx]) -
+                                              static_cast<uint64_t>(base);
+
+                    if (current_delta_bits > 0) {
+                        int64_t current_bit_offset_val = current_bit_offset_base +
+                                                         (int64_t)current_local_idx * current_delta_bits;
+
+                        // Pack the unsigned delta (no sign bit needed)
+                        if (current_delta_bits <= 32) {
+                            uint32_t final_packed_delta = static_cast<uint32_t>(unsigned_delta &
+                                                                               ((1ULL << current_delta_bits) - 1ULL));
+
+                            int target_word_idx = current_bit_offset_val / 32;
+                            int offset_in_word = current_bit_offset_val % 32;
+
+                            if (current_delta_bits + offset_in_word <= 32) {
+                                atomicOr(&delta_array_device[target_word_idx], final_packed_delta << offset_in_word);
+                            } else {
+                                atomicOr(&delta_array_device[target_word_idx], final_packed_delta << offset_in_word);
+                                atomicOr(&delta_array_device[target_word_idx + 1],
+                                        final_packed_delta >> (32 - offset_in_word));
+                            }
+                        } else {
+                            // For deltas > 32 bits
+                            uint64_t final_packed_delta_64 = unsigned_delta &
+                                ((current_delta_bits == 64) ? ~0ULL : ((1ULL << current_delta_bits) - 1ULL));
+
+                            int start_word_idx = current_bit_offset_val / 32;
+                            int offset_in_word = current_bit_offset_val % 32;
+                            int bits_remaining = current_delta_bits;
+                            int word_idx = start_word_idx;
+                            uint64_t delta_to_write = final_packed_delta_64;
+
+                            while (bits_remaining > 0) {
+                                int bits_in_this_word = min(bits_remaining, 32 - offset_in_word);
+                                uint32_t mask = (bits_in_this_word == 32) ? ~0U : ((1U << bits_in_this_word) - 1U);
+                                uint32_t value = (delta_to_write & mask) << offset_in_word;
+                                atomicOr(&delta_array_device[word_idx], value);
+
+                                delta_to_write >>= bits_in_this_word;
+                                bits_remaining -= bits_in_this_word;
+                                word_idx++;
+                                offset_in_word = 0;
+                            }
+                        }
+                    }
+                    // Skip the normal delta encoding below - we already packed the FOR delta
+                    continue;
+                }
+                default:  // LINEAR, CONSTANT, etc.
+                    pred_double = d_model_params[found_partition_idx * 4] +
+                                  d_model_params[found_partition_idx * 4 + 1] * x;
+                    break;
             }
 
-            T pred_T_val = static_cast<T>(round(pred_double));
+            // Use __double2ll_rn for banker's rounding - matches V2 partitioner and Vertical
+            // CRITICAL: For unsigned types, clamp negative predictions to 0 to prevent wrap-around
+            // that causes delta calculation to fail (e.g., -453 wraps to ULLONG_MAX - 452)
+            if constexpr (std::is_unsigned<T>::value) {
+                if (pred_double < 0.0) pred_double = 0.0;
+            }
+            T pred_T_val = static_cast<T>(__double2ll_rn(pred_double));
             long long current_delta_ll = calculateDelta(values_device[current_idx], pred_T_val);
 
             if (current_delta_bits > 0) {

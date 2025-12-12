@@ -1,5 +1,5 @@
 /**
- * Accurate kernel-only benchmark for GLECO compression
+ * Accurate kernel-only benchmark for L3 compression
  * This measures ONLY the GPU kernel execution time, excluding data loading and transfer
  */
 
@@ -17,23 +17,23 @@
 
 // Forward declarations for optimized functions
 template<typename T>
-CompressedDataGLECO<T>* compressDataOptimized(
+CompressedDataL3<T>* compressDataOptimized(
     const std::vector<T>& h_data,
     int partition_size,
     CompressionStats* stats);
 
 template<typename T>
-void freeCompressedDataOptimized(CompressedDataGLECO<T>* compressed);
+void freeCompressedDataOptimized(CompressedDataL3<T>* compressed);
 
 // Forward declarations for original functions
 template<typename T>
-CompressedDataGLECO<T>* compressData(
+CompressedDataL3<T>* compressData(
     const std::vector<T>& h_data,
     int partition_size,
     CompressionStats* stats);
 
 template<typename T>
-void freeCompressedData(CompressedDataGLECO<T>* compressed);
+void freeCompressedData(CompressedDataL3<T>* compressed);
 
 // Dataset information
 struct DatasetInfo {
@@ -159,7 +159,7 @@ void benchmarkDataset(const DatasetInfo& info, std::ofstream& csv_file, bool use
 
 int main() {
     std::cout << "==================================================" << std::endl;
-    std::cout << "  GLECO Kernel-Only Performance Benchmark        " << std::endl;
+    std::cout << "  L3 Kernel-Only Performance Benchmark        " << std::endl;
     std::cout << "==================================================" << std::endl;
 
     // Define datasets (all binary files now)

@@ -23,7 +23,7 @@
 } while(0)
 
 template<typename T>
-void decompressGLECO_Phase2(
+void decompressL3_Phase2(
     const int32_t*, const int32_t*, const int32_t*, const double*,
     const int32_t*, const int64_t*, const uint32_t*, int, int, T*, int, bool);
 
@@ -46,7 +46,7 @@ bool testPattern(const std::string& name, const std::vector<T>& data, int target
     CUDA_CHECK(cudaMalloc(&d_output, data.size() * sizeof(T)));
 
     // Test standard mode
-    decompressGLECO_Phase2(
+    decompressL3_Phase2(
         compressed->d_start_indices,
         compressed->d_end_indices,
         compressed->d_model_types,
@@ -89,7 +89,7 @@ bool testPattern(const std::string& name, const std::vector<T>& data, int target
     }
 
     // Test persistent mode
-    decompressGLECO_Phase2(
+    decompressL3_Phase2(
         compressed->d_start_indices,
         compressed->d_end_indices,
         compressed->d_model_types,
@@ -136,7 +136,7 @@ bool testPattern(const std::string& name, const std::vector<T>& data, int target
 int main() {
     std::cout << "\n";
     std::cout << "╔══════════════════════════════════════════════════════════════╗\n";
-    std::cout << "║  GLECO Phase 2 Quick Correctness Test                       ║\n";
+    std::cout << "║  L3 Phase 2 Quick Correctness Test                       ║\n";
     std::cout << "╚══════════════════════════════════════════════════════════════╝\n";
     std::cout << "\n";
 

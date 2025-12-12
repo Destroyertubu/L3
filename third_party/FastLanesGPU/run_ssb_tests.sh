@@ -1,5 +1,5 @@
 #!/bin/bash
-# SSB Query Test Script for FastLanesGPU with GLECO Data
+# SSB Query Test Script for FastLanesGPU with L3 Data
 # Usage: ./run_ssb_tests.sh [crystal|crystal-opt|all] [query_number]
 # Examples:
 #   ./run_ssb_tests.sh crystal 11        # Run crystal q11 only
@@ -12,7 +12,7 @@ VARIANT="${1:-all}"
 QUERY="${2:-all}"
 
 echo "======================================================================"
-echo "FastLanesGPU SSB Benchmark with GLECO Data (SF=20)"
+echo "FastLanesGPU SSB Benchmark with L3 Data (SF=20)"
 echo "Data: /root/autodl-tmp/code/data/SSB/L3/ssb_data/"
 echo "Data size: ~119M rows in LINEORDER table"
 echo "======================================================================"

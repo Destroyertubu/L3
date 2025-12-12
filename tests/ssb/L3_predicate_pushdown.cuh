@@ -38,7 +38,7 @@
  */
 template<typename T>
 __device__ __forceinline__ bool canPartitionMatch(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     int partition_idx,
     T filter_min,
     T filter_max)
@@ -73,7 +73,7 @@ __device__ __forceinline__ bool canPartitionMatch(
  */
 template<typename T>
 __global__ void stage1_filter_with_predicate_pushdown(
-    const CompressedDataGLECO<T>* c_column,
+    const CompressedDataL3<T>* c_column,
     int num_entries,
     T filter_min,
     T filter_max,
@@ -169,7 +169,7 @@ __global__ void stage1_filter_with_predicate_pushdown(
  */
 template<typename T>
 __device__ __forceinline__ bool canPartitionMatchModelBased(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     int partition_idx,
     T filter_min,
     T filter_max)
@@ -215,7 +215,7 @@ __device__ __forceinline__ bool canPartitionMatchModelBased(
  */
 template<typename T>
 __device__ __forceinline__ bool canPartitionMatchHybrid(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     int partition_idx,
     T filter_min,
     T filter_max)

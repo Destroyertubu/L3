@@ -1,7 +1,7 @@
 /**
- * GLECO Random Access API
+ * L3 Random Access API
  *
- * High-performance random access interface for GLECO compressed data.
+ * High-performance random access interface for L3 compressed data.
  * Provides multiple access patterns optimized for different use cases.
  *
  * VERSION: 1.0.0
@@ -15,8 +15,8 @@
  * - Warp-cooperative decompression
  */
 
-#ifndef GLECO_RANDOM_ACCESS_HPP
-#define GLECO_RANDOM_ACCESS_HPP
+#ifndef L3_RANDOM_ACCESS_HPP
+#define L3_RANDOM_ACCESS_HPP
 
 #include <cuda_runtime.h>
 #include <cstdint>
@@ -80,14 +80,14 @@ struct RandomAccessStats {
  * - Suitable for: Low-volume random access, scattered patterns
  *
  * USAGE:
- *   __global__ void myKernel(CompressedDataGLECO<int>* data) {
+ *   __global__ void myKernel(CompressedDataL3<int>* data) {
  *       int idx = blockIdx.x * blockDim.x + threadIdx.x;
  *       int value = randomAccessElement(data, idx);
  *   }
  */
 template<typename T>
 __device__ T randomAccessElement(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     int global_idx);
 
 /**
@@ -116,11 +116,46 @@ __device__ T randomAccessElement(
  */
 template<typename T>
 cudaError_t randomAccessMultiple(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     const int* d_indices,
     int num_indices,
     T* d_output,
     const RandomAccessConfig* config = nullptr,
+    RandomAccessStats* stats = nullptr,
+    cudaStream_t stream = 0);
+
+// ============================================================================
+// Optimized Random Access API (Vertical-style)
+// ============================================================================
+
+/**
+ * Optimized random access using direct pointer parameters
+ *
+ * This API uses the same kernel structure as Vertical random access:
+ * - Direct array pointer parameters (no struct indirection)
+ * - Branchless bit extraction (matches Vertical optimization)
+ *
+ * PARAMETERS:
+ * - compressed: Compressed data (device memory)
+ * - d_indices: Array of global indices (device memory)
+ * - num_indices: Number of indices
+ * - d_output: Output array (device memory, pre-allocated)
+ * - stats: Output statistics (optional)
+ * - stream: CUDA stream
+ *
+ * RETURNS: cudaError_t
+ *
+ * PERFORMANCE:
+ * - Matches Vertical random access performance
+ * - No struct indirection overhead
+ * - Branchless bit extraction
+ */
+template<typename T>
+cudaError_t randomAccessOptimized(
+    const CompressedDataL3<T>* compressed,
+    const int* d_indices,
+    int num_indices,
+    T* d_output,
     RandomAccessStats* stats = nullptr,
     cudaStream_t stream = 0);
 
@@ -161,7 +196,7 @@ cudaError_t randomAccessMultiple(
  */
 template<typename T>
 cudaError_t randomAccessBatch(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     const int* d_indices,
     int num_indices,
     T* d_output,
@@ -191,7 +226,7 @@ cudaError_t randomAccessBatch(
  */
 template<typename T>
 cudaError_t randomAccessWithPartitions(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     const int* d_indices,
     const int* d_partition_ids,
     int num_indices,
@@ -230,7 +265,7 @@ cudaError_t randomAccessWithPartitions(
  */
 template<typename T>
 cudaError_t randomAccessRange(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     int start_idx,
     int end_idx,
     T* d_output,
@@ -253,7 +288,7 @@ cudaError_t randomAccessRange(
  */
 template<typename T>
 __device__ int findPartition(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     int global_idx);
 
 /**
@@ -278,7 +313,7 @@ __device__ int findPartition(
  */
 template<typename T>
 int buildPartitionLookupTable(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     const int* h_indices,
     int num_indices,
     int* h_partition_ids);
@@ -310,7 +345,7 @@ int buildPartitionLookupTable(
  */
 template<typename T>
 cudaError_t randomAccessWithPredicate(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     const int* d_indices,
     int num_indices,
     bool (*predicate)(T),
@@ -344,10 +379,10 @@ cudaError_t randomAccessWithPredicate(
  */
 template<typename T>
 cudaError_t randomAccessTwoStage(
-    const CompressedDataGLECO<T>* filter_column,
+    const CompressedDataL3<T>* filter_column,
     T filter_min,
     T filter_max,
-    const CompressedDataGLECO<T>** access_columns,
+    const CompressedDataL3<T>** access_columns,
     int num_access_columns,
     int num_total_elements,
     int* d_output_indices,
@@ -374,7 +409,7 @@ cudaError_t randomAccessTwoStage(
  */
 template<typename T>
 cudaError_t benchmarkRandomAccess(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     int num_accesses,
     const char* access_pattern,
     int warmup_iters,
@@ -399,10 +434,10 @@ cudaError_t benchmarkRandomAccess(
  */
 template<typename T>
 cudaError_t profileRandomAccess(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     const int* d_indices,
     int num_indices,
     float* d_profile_output,
     cudaStream_t stream = 0);
 
-#endif // GLECO_RANDOM_ACCESS_HPP
+#endif // L3_RANDOM_ACCESS_HPP

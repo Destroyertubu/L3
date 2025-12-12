@@ -1,12 +1,12 @@
-# GLECO Data Integration for FastLanesGPU
+# L3 Data Integration for FastLanesGPU
 
 ## Overview
 
-This document describes the modifications made to FastLanesGPU to support GLECO-format SSB (Star Schema Benchmark) data.
+This document describes the modifications made to FastLanesGPU to support L3-format SSB (Star Schema Benchmark) data.
 
 ## Data Format
 
-### GLECO Data Specifications
+### L3 Data Specifications
 
 - **Location**: `/root/autodl-tmp/code/data/SSB/L3/ssb_data/`
 - **Scale Factor**: SF=20
@@ -34,7 +34,7 @@ Examples:
 
 ### Modified Files
 
-The following header files were modified to support GLECO data:
+The following header files were modified to support L3 data:
 
 1. **crystal/src/ssb/ssb_utils.h**
    - Changed `SF` from 10 to 20
@@ -166,7 +166,7 @@ Running on **Tesla V100-PCIE-32GB**:
 
 ## Data Generation
 
-The GLECO data was generated using:
+The L3 data was generated using:
 ```bash
 /root/autodl-tmp/code/data/SSB/L3/generate_ssb_data.py
 ```
@@ -175,9 +175,9 @@ This script generates synthetic SSB data at SF=20 with all columns as uint32 bin
 
 ## Notes
 
-1. **Data Compatibility**: The GLECO data is column-oriented binary format compatible with FastLanesGPU's data loading functions.
+1. **Data Compatibility**: The L3 data is column-oriented binary format compatible with FastLanesGPU's data loading functions.
 
-2. **Row Count Difference**: The original FastLanesGPU expected 119,994,746 rows, but GLECO data has 119,968,352 rows. This is a minor difference (~0.02%) and doesn't affect query correctness.
+2. **Row Count Difference**: The original FastLanesGPU expected 119,994,746 rows, but L3 data has 119,968,352 rows. This is a minor difference (~0.02%) and doesn't affect query correctness.
 
 3. **File Extensions**: The key difference from original format is the `.bin` extension on all data files.
 
@@ -185,10 +185,10 @@ This script generates synthetic SSB data at SF=20 with all columns as uint32 bin
 
 ## Summary
 
-The integration successfully enables FastLanesGPU to work with GLECO-format SSB data by:
+The integration successfully enables FastLanesGPU to work with L3-format SSB data by:
 1. Updating scale factor and row counts
 2. Modifying file lookup to include `.bin` extensions
 3. Updating data directory paths
 4. Maintaining backward compatibility with the existing codebase structure
 
-All SSB queries (q11-q43) are now ready to run with the GLECO dataset.
+All SSB queries (q11-q43) are now ready to run with the L3 dataset.

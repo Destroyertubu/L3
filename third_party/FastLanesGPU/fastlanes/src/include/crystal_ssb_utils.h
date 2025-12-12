@@ -7,7 +7,7 @@
 
 using namespace std;
 
-#define SF        20
+#define SF        10
 #define BASE_PATH ""
 
 #if SF == 1
@@ -19,17 +19,17 @@ using namespace std;
 #define D_LEN    2556
 #elif SF == 10
 #if defined SORTED
-#define DATA_DIR BASE_PATH "/home/ubuntu/fff/gpu/data/ssb/data/s10_columnar_sorted/"
+#define DATA_DIR BASE_PATH "/root/autodl-tmp/test/ssb_data/"
 #else
-#define DATA_DIR BASE_PATH "/home/ubuntu/fff/gpu/data/ssb/data/s10_columnar/"
+#define DATA_DIR BASE_PATH "/root/autodl-tmp/test/ssb_data/"
 #endif
 
 #define LO_LEN 59986214
 #define P_LEN  800000
 #define S_LEN  20000
 #define C_LEN  300000
-#define D_LEN  2556
-#else // 20 - Using GLECO data
+#define D_LEN  2557
+#else // 20 - Using L3 data
 #define DATA_DIR BASE_PATH "/root/autodl-tmp/test/ssb_data/"
 #define LO_LEN   119968352
 #define P_LEN    1400000

@@ -1,5 +1,5 @@
 /**
- * GLECO Phase 2.2 Benchmark: All 6 SOSD Datasets
+ * L3 Phase 2.2 Benchmark: All 6 SOSD Datasets
  *
  * Tests the optimized Phase 2.2 bucket decoder on:
  * 1. books_200M_uint32.bin
@@ -25,7 +25,7 @@
 
 // External function declarations for Phase 2.2
 template<typename T>
-void decompressGLECO_Phase2_Bucket(
+void decompressL3_Phase2_Bucket(
     const int32_t* d_start_indices,
     const int32_t* d_end_indices,
     const int32_t* d_model_types,
@@ -107,7 +107,7 @@ void benchmarkDataset(const std::vector<T>& data, const std::string& dataset_nam
     const int PARTITION_SIZE = 4096;
     std::cout << "Compressing with partition size " << PARTITION_SIZE << "..." << std::endl;
 
-    CompressedDataGLECO<T>* compressed = compressData(data, PARTITION_SIZE);
+    CompressedDataL3<T>* compressed = compressData(data, PARTITION_SIZE);
     if (!compressed) {
         std::cerr << "Compression failed!" << std::endl;
         return;
@@ -172,7 +172,7 @@ void benchmarkDataset(const std::vector<T>& data, const std::string& dataset_nam
     const int WARMUP_RUNS = 3;
     std::cout << "Warming up..." << std::endl;
     for (int i = 0; i < WARMUP_RUNS; i++) {
-        decompressGLECO_Phase2_Bucket<T>(
+        decompressL3_Phase2_Bucket<T>(
             compressed->d_start_indices,
             compressed->d_end_indices,
             compressed->d_model_types,
@@ -199,7 +199,7 @@ void benchmarkDataset(const std::vector<T>& data, const std::string& dataset_nam
     for (int i = 0; i < BENCHMARK_RUNS; i++) {
         CUDA_CHECK(cudaEventRecord(start));
 
-        decompressGLECO_Phase2_Bucket<T>(
+        decompressL3_Phase2_Bucket<T>(
             compressed->d_start_indices,
             compressed->d_end_indices,
             compressed->d_model_types,
@@ -270,7 +270,7 @@ void benchmarkDataset(const std::vector<T>& data, const std::string& dataset_nam
 
 int main(int argc, char** argv) {
     std::cout << "╔═══════════════════════════════════════════════════════════════════╗" << std::endl;
-    std::cout << "║  GLECO Phase 2.2 Benchmark: All 6 SOSD Datasets                  ║" << std::endl;
+    std::cout << "║  L3 Phase 2.2 Benchmark: All 6 SOSD Datasets                  ║" << std::endl;
     std::cout << "╚═══════════════════════════════════════════════════════════════════╝" << std::endl;
     std::cout << std::endl;
 

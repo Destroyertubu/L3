@@ -27,7 +27,7 @@
 } while(0)
 
 template<typename T>
-void decompressGLECO_Phase2(
+void decompressL3_Phase2(
     const int32_t*, const int32_t*, const int32_t*, const double*,
     const int32_t*, const int64_t*, const uint32_t*, int, int, T*, int, bool);
 
@@ -47,7 +47,7 @@ struct TuningResult {
 
 template<typename T>
 float benchmarkConfig(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     int total_elements,
     int avg_delta_bits,
@@ -60,7 +60,7 @@ float benchmarkConfig(
 
     // Warmup
     for (int i = 0; i < 2; i++) {
-        decompressGLECO_Phase2(
+        decompressL3_Phase2(
             compressed->d_start_indices,
             compressed->d_end_indices,
             compressed->d_model_types,
@@ -88,7 +88,7 @@ float benchmarkConfig(
     for (int i = 0; i < num_iters; i++) {
         CUDA_CHECK(cudaEventRecord(start));
 
-        decompressGLECO_Phase2(
+        decompressL3_Phase2(
             compressed->d_start_indices,
             compressed->d_end_indices,
             compressed->d_model_types,
@@ -121,7 +121,7 @@ float benchmarkConfig(
 int main() {
     std::cout << "\n";
     std::cout << "╔══════════════════════════════════════════════════════════════╗\n";
-    std::cout << "║  GLECO Phase 2 Auto-Tuning Framework                        ║\n";
+    std::cout << "║  L3 Phase 2 Auto-Tuning Framework                        ║\n";
     std::cout << "╚══════════════════════════════════════════════════════════════╝\n";
     std::cout << "\n";
 

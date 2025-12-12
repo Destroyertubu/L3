@@ -30,7 +30,7 @@
 
 // External function declarations
 template<typename T>
-void decompressGLECO_Phase2_Bucket(
+void decompressL3_Phase2_Bucket(
     const int32_t* d_start_indices,
     const int32_t* d_end_indices,
     const int32_t* d_model_types,
@@ -159,7 +159,7 @@ bool testRoundtripBucket(const std::vector<T>& original, int partition_size,
 
     // Warmup
     for (int i = 0; i < 5; ++i) {
-        decompressGLECO_Phase2_Bucket<T>(
+        decompressL3_Phase2_Bucket<T>(
             compressed->d_start_indices,
             compressed->d_end_indices,
             compressed->d_model_types,
@@ -181,7 +181,7 @@ bool testRoundtripBucket(const std::vector<T>& original, int partition_size,
     for (int i = 0; i < iters; ++i) {
         CUDA_CHECK(cudaEventRecord(start));
 
-        decompressGLECO_Phase2_Bucket<T>(
+        decompressL3_Phase2_Bucket<T>(
             compressed->d_start_indices,
             compressed->d_end_indices,
             compressed->d_model_types,
@@ -257,7 +257,7 @@ bool testRoundtripBucket(const std::vector<T>& original, int partition_size,
 
 int main() {
     std::cout << "╔═══════════════════════════════════════════════════════════╗" << std::endl;
-    std::cout << "║  GLECO Phase 2.2 Bucket-Based Decompression Test Suite  ║" << std::endl;
+    std::cout << "║  L3 Phase 2.2 Bucket-Based Decompression Test Suite  ║" << std::endl;
     std::cout << "╚═══════════════════════════════════════════════════════════╝" << std::endl;
 
     int device;

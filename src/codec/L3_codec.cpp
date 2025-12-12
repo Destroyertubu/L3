@@ -1,13 +1,15 @@
 /**
- * GLECO Codec Implementation
+ * L3 Codec Implementation
  *
  * Simple, principle-preserving implementation of compression/decompression API
  *
  * PORT DATE: 2025-10-14
- * STATUS: Baseline implementation with fixed-size partitioning
+ * STATUS: Now with adaptive partitioning enabled by default
  */
 
 #include "L3_codec.hpp"
+#include "encoder_variable_length.cuh"
+#include "encoder_cost_optimal.cuh"
 #include <iostream>
 #include <cstring>
 #include <cmath>
@@ -118,6 +120,12 @@ int uploadPrecomputedPartitions(
     return num_partitions;
 }
 
+template int uploadPrecomputedPartitions<int32_t>(
+    const std::vector<PartitionInfo>&, int32_t*, int32_t*, int32_t*, double*, int32_t*, int64_t*);
+template int uploadPrecomputedPartitions<uint32_t>(
+    const std::vector<PartitionInfo>&, int32_t*, int32_t*, int32_t*, double*, int32_t*, int64_t*);
+template int uploadPrecomputedPartitions<int64_t>(
+    const std::vector<PartitionInfo>&, int32_t*, int32_t*, int32_t*, double*, int32_t*, int64_t*);
 template int uploadPrecomputedPartitions<uint64_t>(
     const std::vector<PartitionInfo>&, int32_t*, int32_t*, int32_t*, double*, int32_t*, int64_t*);
 
@@ -126,7 +134,113 @@ template int uploadPrecomputedPartitions<uint64_t>(
 // ============================================================================
 
 template<typename T>
-CompressedDataGLECO<T>* compressData(
+CompressedDataL3<T>* compressData(
+    const T* h_data,
+    int num_elements,
+    int partition_size,
+    CompressionStats* stats)
+{
+    // Use default config with adaptive partitioning enabled
+    L3Config config;
+    config.partition_size = partition_size;
+    // config.use_adaptive_partitioning is true by default
+
+    return compressDataWithConfig(std::vector<T>(h_data, h_data + num_elements), config, stats);
+}
+
+template<typename T>
+CompressedDataL3<T>* compressData(
+    const std::vector<T>& h_data,
+    int partition_size,
+    CompressionStats* stats)
+{
+    // Use default config with adaptive partitioning enabled
+    L3Config config;
+    config.partition_size = partition_size;
+    // config.use_adaptive_partitioning is true by default
+
+    return compressDataWithConfig(h_data, config, stats);
+}
+
+// ============================================================================
+// Compression with Config (main implementation)
+// ============================================================================
+
+template<typename T>
+CompressedDataL3<T>* compressDataWithConfig(
+    const std::vector<T>& h_data,
+    const L3Config& config,
+    CompressionStats* stats)
+{
+    int num_elements = h_data.size();
+    if (num_elements == 0) {
+        return nullptr;
+    }
+
+    // Use the new partitioning strategy enum
+    switch (config.partitioning_strategy) {
+        case PartitioningStrategy::COST_OPTIMAL: {
+            // NEW: Cost-optimal partitioning (delta-bits driven, prevents explosion)
+            CostOptimalConfig cost_config;
+            cost_config.analysis_block_size = config.cost_analysis_block_size;
+            cost_config.min_partition_size = config.cost_min_partition_size;
+            cost_config.max_partition_size = config.cost_max_partition_size;
+            cost_config.target_partition_size = config.cost_target_partition_size;
+            cost_config.breakpoint_threshold = config.cost_breakpoint_threshold;
+            cost_config.merge_benefit_threshold = config.cost_merge_benefit_threshold;
+            cost_config.max_merge_rounds = config.cost_max_merge_rounds;
+            cost_config.enable_merging = config.cost_enable_merging;
+            // Enable polynomial models for better compression on non-linear data
+            cost_config.enable_polynomial_models = config.enable_polynomial_models;
+
+            int num_partitions_out;
+            std::vector<PartitionInfo> partitions = createPartitionsCostOptimal(
+                h_data, cost_config, &num_partitions_out, 0);
+
+            if (partitions.empty()) {
+                // Fallback to fixed partitioning if cost-optimal fails
+                std::cerr << "Warning: Cost-optimal partitioning failed, falling back to fixed partitions" << std::endl;
+                return compressDataFixedPartitions(h_data.data(), num_elements, config.partition_size, stats);
+            }
+
+            return compressDataWithPartitions(h_data, partitions, stats);
+        }
+
+        case PartitioningStrategy::VARIANCE_ADAPTIVE: {
+            // Legacy variance-based adaptive partitioning
+            int num_partitions_out;
+            std::vector<PartitionInfo> partitions = createPartitionsVariableLength(
+                h_data,
+                config.partition_size,
+                &num_partitions_out,
+                0,  // default stream
+                config.variance_block_multiplier,
+                config.num_variance_thresholds
+            );
+
+            if (partitions.empty()) {
+                // Fallback to fixed partitioning if adaptive fails
+                std::cerr << "Warning: Adaptive partitioning failed, falling back to fixed partitions" << std::endl;
+                return compressDataFixedPartitions(h_data.data(), num_elements, config.partition_size, stats);
+            }
+
+            return compressDataWithPartitions(h_data, partitions, stats);
+        }
+
+        case PartitioningStrategy::FIXED:
+        default: {
+            // Fixed-size partitioning (legacy behavior)
+            return compressDataFixedPartitions(h_data.data(), num_elements, config.partition_size, stats);
+        }
+    }
+}
+
+// ============================================================================
+// Fixed-Size Partitioning Compression (internal)
+// ============================================================================
+
+template<typename T>
+CompressedDataL3<T>* compressDataFixedPartitions(
     const T* h_data,
     int num_elements,
     int partition_size,
@@ -138,7 +252,7 @@ CompressedDataGLECO<T>* compressData(
     CUDA_CHECK(cudaEventRecord(start));
 
     // Allocate compressed data structure
-    CompressedDataGLECO<T>* compressed = new CompressedDataGLECO<T>();
+    CompressedDataL3<T>* compressed = new CompressedDataL3<T>();
     compressed->total_values = num_elements;
 
     // Upload data to GPU
@@ -226,8 +340,8 @@ CompressedDataGLECO<T>* compressData(
     CUDA_CHECK(cudaDeviceSynchronize());
 
     // Create device-side copy of struct for d_self
-    CUDA_CHECK(cudaMalloc(&compressed->d_self, sizeof(CompressedDataGLECO<T>)));
-    CUDA_CHECK(cudaMemcpy(compressed->d_self, compressed, sizeof(CompressedDataGLECO<T>), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMalloc(&compressed->d_self, sizeof(CompressedDataL3<T>)));
+    CUDA_CHECK(cudaMemcpy(compressed->d_self, compressed, sizeof(CompressedDataL3<T>), cudaMemcpyHostToDevice));
 
     // Record timing
     CUDA_CHECK(cudaEventRecord(stop));
@@ -283,32 +397,35 @@ CompressedDataGLECO<T>* compressData(
     return compressed;
 }
 
-template<typename T>
-CompressedDataGLECO<T>* compressData(
-    const std::vector<T>& h_data,
-    int partition_size,
-    CompressionStats* stats)
-{
-    return compressData(h_data.data(), h_data.size(), partition_size, stats);
-}
+// Template instantiations for compressData
+template CompressedDataL3<int32_t>* compressData(const int32_t*, int, int, CompressionStats*);
+template CompressedDataL3<uint32_t>* compressData(const uint32_t*, int, int, CompressionStats*);
+template CompressedDataL3<int64_t>* compressData(const int64_t*, int, int, CompressionStats*);
+template CompressedDataL3<uint64_t>* compressData(const uint64_t*, int, int, CompressionStats*);
 
-// Template instantiations
-template CompressedDataGLECO<int32_t>* compressData(const int32_t*, int, int, CompressionStats*);
-template CompressedDataGLECO<uint32_t>* compressData(const uint32_t*, int, int, CompressionStats*);
-template CompressedDataGLECO<int64_t>* compressData(const int64_t*, int, int, CompressionStats*);
-template CompressedDataGLECO<uint64_t>* compressData(const uint64_t*, int, int, CompressionStats*);
+template CompressedDataL3<int32_t>* compressData(const std::vector<int32_t>&, int, CompressionStats*);
+template CompressedDataL3<uint32_t>* compressData(const std::vector<uint32_t>&, int, CompressionStats*);
+template CompressedDataL3<int64_t>* compressData(const std::vector<int64_t>&, int, CompressionStats*);
+template CompressedDataL3<uint64_t>* compressData(const std::vector<uint64_t>&, int, CompressionStats*);
 
-template CompressedDataGLECO<int32_t>* compressData(const std::vector<int32_t>&, int, CompressionStats*);
-template CompressedDataGLECO<uint32_t>* compressData(const std::vector<uint32_t>&, int, CompressionStats*);
-template CompressedDataGLECO<int64_t>* compressData(const std::vector<int64_t>&, int, CompressionStats*);
-template CompressedDataGLECO<uint64_t>* compressData(const std::vector<uint64_t>&, int, CompressionStats*);
+// Template instantiations for compressDataWithConfig
+template CompressedDataL3<int32_t>* compressDataWithConfig(const std::vector<int32_t>&, const L3Config&, CompressionStats*);
+template CompressedDataL3<uint32_t>* compressDataWithConfig(const std::vector<uint32_t>&, const L3Config&, CompressionStats*);
+template CompressedDataL3<int64_t>* compressDataWithConfig(const std::vector<int64_t>&, const L3Config&, CompressionStats*);
+template CompressedDataL3<uint64_t>* compressDataWithConfig(const std::vector<uint64_t>&, const L3Config&, CompressionStats*);
+
+// Template instantiations for compressDataFixedPartitions (internal)
+template CompressedDataL3<int32_t>* compressDataFixedPartitions(const int32_t*, int, int, CompressionStats*);
+template CompressedDataL3<uint32_t>* compressDataFixedPartitions(const uint32_t*, int, int, CompressionStats*);
+template CompressedDataL3<int64_t>* compressDataFixedPartitions(const int64_t*, int, int, CompressionStats*);
+template CompressedDataL3<uint64_t>* compressDataFixedPartitions(const uint64_t*, int, int, CompressionStats*);
 
 // ============================================================================
 // Compression with Precomputed Partitions (Variable-Length)
 // ============================================================================
 
 template<typename T>
-CompressedDataGLECO<T>* compressDataWithPartitions(
+CompressedDataL3<T>* compressDataWithPartitions(
     const T* h_data,
     int num_elements,
     const std::vector<PartitionInfo>& partitions,
@@ -320,7 +437,7 @@ CompressedDataGLECO<T>* compressDataWithPartitions(
     CUDA_CHECK(cudaEventRecord(start));
 
     // Allocate compressed data structure
-    CompressedDataGLECO<T>* compressed = new CompressedDataGLECO<T>();
+    CompressedDataL3<T>* compressed = new CompressedDataL3<T>();
     compressed->total_values = num_elements;
     int num_partitions = partitions.size();
     compressed->num_partitions = num_partitions;
@@ -416,8 +533,8 @@ CompressedDataGLECO<T>* compressDataWithPartitions(
     CUDA_CHECK(cudaDeviceSynchronize());
 
     // Create device-side copy of struct for d_self
-    CUDA_CHECK(cudaMalloc(&compressed->d_self, sizeof(CompressedDataGLECO<T>)));
-    CUDA_CHECK(cudaMemcpy(compressed->d_self, compressed, sizeof(CompressedDataGLECO<T>), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMalloc(&compressed->d_self, sizeof(CompressedDataL3<T>)));
+    CUDA_CHECK(cudaMemcpy(compressed->d_self, compressed, sizeof(CompressedDataL3<T>), cudaMemcpyHostToDevice));
 
     // Record timing
     CUDA_CHECK(cudaEventRecord(stop));
@@ -461,7 +578,7 @@ CompressedDataGLECO<T>* compressDataWithPartitions(
 }
 
 template<typename T>
-CompressedDataGLECO<T>* compressDataWithPartitions(
+CompressedDataL3<T>* compressDataWithPartitions(
     const std::vector<T>& h_data,
     const std::vector<PartitionInfo>& partitions,
     CompressionStats* stats)
@@ -469,10 +586,23 @@ CompressedDataGLECO<T>* compressDataWithPartitions(
     return compressDataWithPartitions(h_data.data(), h_data.size(), partitions, stats);
 }
 
-// Template instantiations
-template CompressedDataGLECO<uint64_t>* compressDataWithPartitions(
+// Template instantiations for compressDataWithPartitions
+template CompressedDataL3<int32_t>* compressDataWithPartitions(
+    const int32_t*, int, const std::vector<PartitionInfo>&, CompressionStats*);
+template CompressedDataL3<uint32_t>* compressDataWithPartitions(
+    const uint32_t*, int, const std::vector<PartitionInfo>&, CompressionStats*);
+template CompressedDataL3<int64_t>* compressDataWithPartitions(
+    const int64_t*, int, const std::vector<PartitionInfo>&, CompressionStats*);
+template CompressedDataL3<uint64_t>* compressDataWithPartitions(
     const uint64_t*, int, const std::vector<PartitionInfo>&, CompressionStats*);
-template CompressedDataGLECO<uint64_t>* compressDataWithPartitions(
+
+template CompressedDataL3<int32_t>* compressDataWithPartitions(
+    const std::vector<int32_t>&, const std::vector<PartitionInfo>&, CompressionStats*);
+template CompressedDataL3<uint32_t>* compressDataWithPartitions(
+    const std::vector<uint32_t>&, const std::vector<PartitionInfo>&, CompressionStats*);
+template CompressedDataL3<int64_t>* compressDataWithPartitions(
+    const std::vector<int64_t>&, const std::vector<PartitionInfo>&, CompressionStats*);
+template CompressedDataL3<uint64_t>* compressDataWithPartitions(
     const std::vector<uint64_t>&, const std::vector<PartitionInfo>&, CompressionStats*);
 
 // ============================================================================
@@ -480,7 +610,7 @@ template CompressedDataGLECO<uint64_t>* compressDataWithPartitions(
 // ============================================================================
 
 template<typename T>
-void freeCompressedData(CompressedDataGLECO<T>* compressed)
+void freeCompressedData(CompressedDataL3<T>* compressed)
 {
     if (!compressed) return;
 
@@ -500,10 +630,10 @@ void freeCompressedData(CompressedDataGLECO<T>* compressed)
     delete compressed;
 }
 
-template void freeCompressedData<int32_t>(CompressedDataGLECO<int32_t>*);
-template void freeCompressedData<uint32_t>(CompressedDataGLECO<uint32_t>*);
-template void freeCompressedData<int64_t>(CompressedDataGLECO<int64_t>*);
-template void freeCompressedData<uint64_t>(CompressedDataGLECO<uint64_t>*);
+template void freeCompressedData<int32_t>(CompressedDataL3<int32_t>*);
+template void freeCompressedData<uint32_t>(CompressedDataL3<uint32_t>*);
+template void freeCompressedData<int64_t>(CompressedDataL3<int64_t>*);
+template void freeCompressedData<uint64_t>(CompressedDataL3<uint64_t>*);
 
 // ============================================================================
 // Decompression (stub - will link to existing decompression kernels)
@@ -512,7 +642,7 @@ template void freeCompressedData<uint64_t>(CompressedDataGLECO<uint64_t>*);
 // Forward declare decompression kernel launchers
 template<typename T>
 void launchDecompressOptimized(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     cudaStream_t stream
 );
@@ -520,7 +650,7 @@ void launchDecompressOptimized(
 // Simple non-optimized decoder (for debugging)
 template<typename T>
 void launchDecompressSimple(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     cudaStream_t stream
 );
@@ -528,14 +658,14 @@ void launchDecompressSimple(
 // Warp-optimized decoder (extreme performance)
 template<typename T>
 void launchDecompressWarpOpt(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     cudaStream_t stream
 );
 
 template<typename T>
 int decompressData(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* h_output,
     int output_capacity,
     DecompressionStats* stats)
@@ -590,7 +720,7 @@ int decompressData(
 
 template<typename T>
 int decompressData(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     std::vector<T>& h_output,
     DecompressionStats* stats)
 {
@@ -599,15 +729,15 @@ int decompressData(
 }
 
 // Template instantiations
-template int decompressData(const CompressedDataGLECO<int32_t>*, int32_t*, int, DecompressionStats*);
-template int decompressData(const CompressedDataGLECO<uint32_t>*, uint32_t*, int, DecompressionStats*);
-template int decompressData(const CompressedDataGLECO<int64_t>*, int64_t*, int, DecompressionStats*);
-template int decompressData(const CompressedDataGLECO<uint64_t>*, uint64_t*, int, DecompressionStats*);
+template int decompressData(const CompressedDataL3<int32_t>*, int32_t*, int, DecompressionStats*);
+template int decompressData(const CompressedDataL3<uint32_t>*, uint32_t*, int, DecompressionStats*);
+template int decompressData(const CompressedDataL3<int64_t>*, int64_t*, int, DecompressionStats*);
+template int decompressData(const CompressedDataL3<uint64_t>*, uint64_t*, int, DecompressionStats*);
 
-template int decompressData(const CompressedDataGLECO<int32_t>*, std::vector<int32_t>&, DecompressionStats*);
-template int decompressData(const CompressedDataGLECO<uint32_t>*, std::vector<uint32_t>&, DecompressionStats*);
-template int decompressData(const CompressedDataGLECO<int64_t>*, std::vector<int64_t>&, DecompressionStats*);
-template int decompressData(const CompressedDataGLECO<uint64_t>*, std::vector<uint64_t>&, DecompressionStats*);
+template int decompressData(const CompressedDataL3<int32_t>*, std::vector<int32_t>&, DecompressionStats*);
+template int decompressData(const CompressedDataL3<uint32_t>*, std::vector<uint32_t>&, DecompressionStats*);
+template int decompressData(const CompressedDataL3<int64_t>*, std::vector<int64_t>&, DecompressionStats*);
+template int decompressData(const CompressedDataL3<uint64_t>*, std::vector<uint64_t>&, DecompressionStats*);
 
 // ============================================================================
 // Roundtrip Test
@@ -626,7 +756,7 @@ bool testRoundtrip(
 
     // Compress
     CompressionStats comp_stats;
-    CompressedDataGLECO<T>* compressed = compressData(original_data, partition_size, &comp_stats);
+    CompressedDataL3<T>* compressed = compressData(original_data, partition_size, &comp_stats);
 
     if (verbose) {
         std::cout << "Compressed: " << comp_stats.original_bytes << " -> "
@@ -680,7 +810,7 @@ template bool testRoundtrip(const std::vector<uint64_t>&, int, bool);
 // ============================================================================
 
 template<typename T>
-bool verifyCompressedData(const CompressedDataGLECO<T>* compressed)
+bool verifyCompressedData(const CompressedDataL3<T>* compressed)
 {
     if (!compressed) return false;
     if (compressed->num_partitions <= 0) return false;
@@ -709,7 +839,7 @@ bool verifyCompressedData(const CompressedDataGLECO<T>* compressed)
     return true;
 }
 
-template bool verifyCompressedData(const CompressedDataGLECO<int32_t>*);
-template bool verifyCompressedData(const CompressedDataGLECO<uint32_t>*);
-template bool verifyCompressedData(const CompressedDataGLECO<int64_t>*);
-template bool verifyCompressedData(const CompressedDataGLECO<uint64_t>*);
+template bool verifyCompressedData(const CompressedDataL3<int32_t>*);
+template bool verifyCompressedData(const CompressedDataL3<uint32_t>*);
+template bool verifyCompressedData(const CompressedDataL3<int64_t>*);
+template bool verifyCompressedData(const CompressedDataL3<uint64_t>*);

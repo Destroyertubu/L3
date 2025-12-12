@@ -1,5 +1,5 @@
 /**
- * GLECO Optimized Codec Implementation
+ * L3 Optimized Codec Implementation
  * Using optimized GPU kernels for better compression performance
  */
 
@@ -59,7 +59,7 @@ void launchDeltaPackingOptimized(
 // Warp-optimized decoder (for decompression)
 template<typename T>
 void launchDecompressWarpOpt(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     cudaStream_t stream);
 
@@ -107,7 +107,7 @@ int createAdaptivePartitions(
 // ============================================================================
 
 template<typename T>
-CompressedDataGLECO<T>* compressDataOptimized(
+CompressedDataL3<T>* compressDataOptimized(
     const T* h_data,
     int num_elements,
     int partition_size,
@@ -124,7 +124,7 @@ CompressedDataGLECO<T>* compressDataOptimized(
     CUDA_CHECK(cudaEventRecord(start, stream1));
 
     // Allocate compressed data structure
-    CompressedDataGLECO<T>* compressed = new CompressedDataGLECO<T>();
+    CompressedDataL3<T>* compressed = new CompressedDataL3<T>();
     compressed->total_values = num_elements;
 
     // Asynchronously upload data to GPU
@@ -270,7 +270,7 @@ CompressedDataGLECO<T>* compressDataOptimized(
 }
 
 template<typename T>
-CompressedDataGLECO<T>* compressDataOptimized(
+CompressedDataL3<T>* compressDataOptimized(
     const std::vector<T>& h_data,
     int partition_size,
     CompressionStats* stats)
@@ -283,7 +283,7 @@ CompressedDataGLECO<T>* compressDataOptimized(
 // ============================================================================
 
 template<typename T>
-void freeCompressedDataOptimized(CompressedDataGLECO<T>* compressed)
+void freeCompressedDataOptimized(CompressedDataL3<T>* compressed)
 {
     if (!compressed) return;
 
@@ -306,7 +306,7 @@ void freeCompressedDataOptimized(CompressedDataGLECO<T>* compressed)
 
 template<typename T>
 int decompressDataOptimized(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* h_output,
     int output_capacity,
     DecompressionStats* stats)
@@ -360,7 +360,7 @@ int decompressDataOptimized(
 
 template<typename T>
 int decompressDataOptimized(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     std::vector<T>& h_output,
     DecompressionStats* stats)
 {
@@ -372,27 +372,27 @@ int decompressDataOptimized(
 // Template Instantiations
 // ============================================================================
 
-template CompressedDataGLECO<int32_t>* compressDataOptimized(const int32_t*, int, int, CompressionStats*);
-template CompressedDataGLECO<uint32_t>* compressDataOptimized(const uint32_t*, int, int, CompressionStats*);
-template CompressedDataGLECO<int64_t>* compressDataOptimized(const int64_t*, int, int, CompressionStats*);
-template CompressedDataGLECO<uint64_t>* compressDataOptimized(const uint64_t*, int, int, CompressionStats*);
+template CompressedDataL3<int32_t>* compressDataOptimized(const int32_t*, int, int, CompressionStats*);
+template CompressedDataL3<uint32_t>* compressDataOptimized(const uint32_t*, int, int, CompressionStats*);
+template CompressedDataL3<int64_t>* compressDataOptimized(const int64_t*, int, int, CompressionStats*);
+template CompressedDataL3<uint64_t>* compressDataOptimized(const uint64_t*, int, int, CompressionStats*);
 
-template CompressedDataGLECO<int32_t>* compressDataOptimized(const std::vector<int32_t>&, int, CompressionStats*);
-template CompressedDataGLECO<uint32_t>* compressDataOptimized(const std::vector<uint32_t>&, int, CompressionStats*);
-template CompressedDataGLECO<int64_t>* compressDataOptimized(const std::vector<int64_t>&, int, CompressionStats*);
-template CompressedDataGLECO<uint64_t>* compressDataOptimized(const std::vector<uint64_t>&, int, CompressionStats*);
+template CompressedDataL3<int32_t>* compressDataOptimized(const std::vector<int32_t>&, int, CompressionStats*);
+template CompressedDataL3<uint32_t>* compressDataOptimized(const std::vector<uint32_t>&, int, CompressionStats*);
+template CompressedDataL3<int64_t>* compressDataOptimized(const std::vector<int64_t>&, int, CompressionStats*);
+template CompressedDataL3<uint64_t>* compressDataOptimized(const std::vector<uint64_t>&, int, CompressionStats*);
 
-template void freeCompressedDataOptimized<int32_t>(CompressedDataGLECO<int32_t>*);
-template void freeCompressedDataOptimized<uint32_t>(CompressedDataGLECO<uint32_t>*);
-template void freeCompressedDataOptimized<int64_t>(CompressedDataGLECO<int64_t>*);
-template void freeCompressedDataOptimized<uint64_t>(CompressedDataGLECO<uint64_t>*);
+template void freeCompressedDataOptimized<int32_t>(CompressedDataL3<int32_t>*);
+template void freeCompressedDataOptimized<uint32_t>(CompressedDataL3<uint32_t>*);
+template void freeCompressedDataOptimized<int64_t>(CompressedDataL3<int64_t>*);
+template void freeCompressedDataOptimized<uint64_t>(CompressedDataL3<uint64_t>*);
 
-template int decompressDataOptimized(const CompressedDataGLECO<int32_t>*, int32_t*, int, DecompressionStats*);
-template int decompressDataOptimized(const CompressedDataGLECO<uint32_t>*, uint32_t*, int, DecompressionStats*);
-template int decompressDataOptimized(const CompressedDataGLECO<int64_t>*, int64_t*, int, DecompressionStats*);
-template int decompressDataOptimized(const CompressedDataGLECO<uint64_t>*, uint64_t*, int, DecompressionStats*);
+template int decompressDataOptimized(const CompressedDataL3<int32_t>*, int32_t*, int, DecompressionStats*);
+template int decompressDataOptimized(const CompressedDataL3<uint32_t>*, uint32_t*, int, DecompressionStats*);
+template int decompressDataOptimized(const CompressedDataL3<int64_t>*, int64_t*, int, DecompressionStats*);
+template int decompressDataOptimized(const CompressedDataL3<uint64_t>*, uint64_t*, int, DecompressionStats*);
 
-template int decompressDataOptimized(const CompressedDataGLECO<int32_t>*, std::vector<int32_t>&, DecompressionStats*);
-template int decompressDataOptimized(const CompressedDataGLECO<uint32_t>*, std::vector<uint32_t>&, DecompressionStats*);
-template int decompressDataOptimized(const CompressedDataGLECO<int64_t>*, std::vector<int64_t>&, DecompressionStats*);
-template int decompressDataOptimized(const CompressedDataGLECO<uint64_t>*, std::vector<uint64_t>&, DecompressionStats*);
+template int decompressDataOptimized(const CompressedDataL3<int32_t>*, std::vector<int32_t>&, DecompressionStats*);
+template int decompressDataOptimized(const CompressedDataL3<uint32_t>*, std::vector<uint32_t>&, DecompressionStats*);
+template int decompressDataOptimized(const CompressedDataL3<int64_t>*, std::vector<int64_t>&, DecompressionStats*);
+template int decompressDataOptimized(const CompressedDataL3<uint64_t>*, std::vector<uint64_t>&, DecompressionStats*);

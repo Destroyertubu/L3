@@ -1,4 +1,4 @@
-// SSB Query 4.2 with GLECO2 Compression - RANDOM ACCESS VERSION (_2push version)
+// SSB Query 4.2 with L32 Compression - RANDOM ACCESS VERSION (_2push version)
 // Stage 1: Scan orderdate, partkey, custkey, suppkey (4 cols)
 // Stage 2: Random access revenue, supplycost (2 cols)
 
@@ -54,10 +54,10 @@ struct GroupKey {
 
 template<typename T>
 __global__ void ssb_q42_stage1_scan(
-    const CompressedDataGLECO<T>* c_orderdate,
-    const CompressedDataGLECO<T>* c_partkey,
-    const CompressedDataGLECO<T>* c_custkey,
-    const CompressedDataGLECO<T>* c_suppkey,
+    const CompressedDataL3<T>* c_orderdate,
+    const CompressedDataL3<T>* c_partkey,
+    const CompressedDataL3<T>* c_custkey,
+    const CompressedDataL3<T>* c_suppkey,
     const DateEntry* d_date_ht,
     const PartEntry* d_part_ht,
     const CustomerEntry* d_customer_ht,
@@ -75,7 +75,7 @@ __global__ void ssb_q42_stage1_scan(
 
     if (threadIdx.x == 0) {
         s_local_count = 0;
-        const CompressedDataGLECO<T>* data_arr[4] = {c_orderdate, c_partkey, c_custkey, c_suppkey};
+        const CompressedDataL3<T>* data_arr[4] = {c_orderdate, c_partkey, c_custkey, c_suppkey};
         for (int i = 0; i < 4; i++) {
             s_meta[i].start_idx = data_arr[i]->d_start_indices[partition_idx];
             s_meta[i].delta_bits = data_arr[i]->d_delta_bits[partition_idx];
@@ -183,8 +183,8 @@ __global__ void ssb_q42_stage1_scan(
 
 template<typename T>
 __global__ void ssb_q42_stage2_random_access(
-    const CompressedDataGLECO<T>* c_revenue,
-    const CompressedDataGLECO<T>* c_supplycost,
+    const CompressedDataL3<T>* c_revenue,
+    const CompressedDataL3<T>* c_supplycost,
     const Candidate* d_candidates,
     int num_candidates,
     unsigned long long* d_group_results,
@@ -235,7 +235,7 @@ __global__ void ssb_q42_stage2_random_access(
 
 int main(int argc, char** argv) {
     cout << "========================================================================" << endl;
-    cout << "  SSB Query 4.2 with GLECO2 Compression - RANDOM ACCESS" << endl;
+    cout << "  SSB Query 4.2 with L32 Compression - RANDOM ACCESS" << endl;
     cout << "========================================================================" << endl;
     cout << endl;
 
@@ -300,17 +300,17 @@ int main(int argc, char** argv) {
     cout << "✓ Hash tables built" << endl;
     cout << endl;
 
-    cout << "Compressing LINEORDER columns with GLECO2..." << endl;
+    cout << "Compressing LINEORDER columns with L32..." << endl;
     
     
     auto compress_start = chrono::high_resolution_clock::now();
 
-    CompressedDataGLECO<uint32_t>* c_orderdate = compressData(lo_orderdate, 1024);
-    CompressedDataGLECO<uint32_t>* c_custkey_c = compressData(lo_custkey, 1024);
-    CompressedDataGLECO<uint32_t>* c_suppkey_c = compressData(lo_suppkey, 1024);
-    CompressedDataGLECO<uint32_t>* c_partkey_c = compressData(lo_partkey, 1024);
-    CompressedDataGLECO<uint32_t>* c_revenue = compressData(lo_revenue, 1024);
-    CompressedDataGLECO<uint32_t>* c_supplycost_c = compressData(lo_supplycost, 1024);
+    CompressedDataL3<uint32_t>* c_orderdate = compressData(lo_orderdate, 1024);
+    CompressedDataL3<uint32_t>* c_custkey_c = compressData(lo_custkey, 1024);
+    CompressedDataL3<uint32_t>* c_suppkey_c = compressData(lo_suppkey, 1024);
+    CompressedDataL3<uint32_t>* c_partkey_c = compressData(lo_partkey, 1024);
+    CompressedDataL3<uint32_t>* c_revenue = compressData(lo_revenue, 1024);
+    CompressedDataL3<uint32_t>* c_supplycost_c = compressData(lo_supplycost, 1024);
 
     auto compress_end = chrono::high_resolution_clock::now();
     double compress_time = chrono::duration<double>(compress_end - compress_start).count();

@@ -1,4 +1,4 @@
-# Getting Started with GLECO
+# Getting Started with L3
 
 ## Installation
 
@@ -53,7 +53,7 @@ for (int i = 0; i < data.size(); i++) {
 }
 
 // Compress
-CompressedDataGLECO<uint32_t>* compressed = compressData(data);
+CompressedDataL3<uint32_t>* compressed = compressData(data);
 
 // Decompress
 std::vector<uint32_t> decompressed;
@@ -69,7 +69,7 @@ freeCompressedData(compressed);
 #include "L3_random_access.hpp"
 
 // Compress data
-CompressedDataGLECO<uint32_t>* compressed = compressData(data, 1024);
+CompressedDataL3<uint32_t>* compressed = compressData(data, 1024);
 
 // Random access on GPU
 uint32_t value = randomAccessGPU(compressed, 12345);
