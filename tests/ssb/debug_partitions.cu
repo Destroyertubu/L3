@@ -10,7 +10,7 @@ int main() {
     vector<uint32_t> lo_orderdate = loadColumn<uint32_t>("lo_orderdate", LO_LEN);
     
     // Compress with partition size 1024
-    CompressedDataGLECO<uint32_t>* c_data = compressData(lo_orderdate, 1024);
+    CompressedDataL3<uint32_t>* c_data = compressData(lo_orderdate, 1024);
     
     // Download partition min/max values
     vector<uint32_t> h_min(c_data->num_partitions);

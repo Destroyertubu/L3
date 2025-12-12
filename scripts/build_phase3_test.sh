@@ -8,7 +8,7 @@ COMMON_FLAGS="-std=c++17 -O3 -I./include -I./src/opt/phase3_advanced_codec"
 CUDA_FLAGS="-gencode=arch=compute_${CUDA_ARCH},code=sm_${CUDA_ARCH} --expt-relaxed-constexpr -Xcompiler -fPIC"
 
 echo "════════════════════════════════════════════════════════════════"
-echo "  Building GLECO Phase 3: Delta-of-Delta Codec Test"
+echo "  Building L3 Phase 3: Delta-of-Delta Codec Test"
 echo "════════════════════════════════════════════════════════════════"
 echo ""
 

@@ -10,7 +10,7 @@ BIN_DIR="$PROJECT_ROOT/bin"
 cd "$PROJECT_ROOT"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║  Running GLECO Decompression Baseline Benchmarks            ║"
+echo "║  Running L3 Decompression Baseline Benchmarks            ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 

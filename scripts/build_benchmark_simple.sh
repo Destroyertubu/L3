@@ -4,7 +4,7 @@
 set -e
 
 echo "════════════════════════════════════════════════════════════"
-echo "  Building GLECO Random Access Benchmark (Simple Mode)"
+echo "  Building L3 Random Access Benchmark (Simple Mode)"
 echo "════════════════════════════════════════════════════════════"
 
 CUDA_ARCH="90"

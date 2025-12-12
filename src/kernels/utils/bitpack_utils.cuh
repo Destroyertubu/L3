@@ -2,7 +2,7 @@
 #define BITPACK_UTILS_CUH_OPTIMIZED
 
 /**
- * GLECO Optimized Bit-Packing Utilities
+ * L3 Optimized Bit-Packing Utilities
  *
  * OPTIMIZATIONS APPLIED:
  * 1. Template specialization for constant bitwidths (compile-time optimization)

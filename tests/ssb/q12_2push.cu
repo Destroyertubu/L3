@@ -28,9 +28,9 @@ template<typename T>
 __global__ void stage2_q12(
     const int* d_candidate_indices,
     int num_candidates,
-    const CompressedDataGLECO<T>* c_lo_discount,
-    const CompressedDataGLECO<T>* c_lo_quantity,
-    const CompressedDataGLECO<T>* c_lo_extendedprice,
+    const CompressedDataL3<T>* c_lo_discount,
+    const CompressedDataL3<T>* c_lo_quantity,
+    const CompressedDataL3<T>* c_lo_extendedprice,
     unsigned long long* result)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -73,13 +73,13 @@ int main(int argc, char** argv) {
     cout << endl;
 
     // Compress columns
-    cout << "Compressing columns with GLECO..." << endl;
+    cout << "Compressing columns with L3..." << endl;
     auto compress_start = chrono::high_resolution_clock::now();
 
-    CompressedDataGLECO<uint32_t>* c_lo_orderdate = compressData(lo_orderdate, 1024);
-    CompressedDataGLECO<uint32_t>* c_lo_discount = compressData(lo_discount, 1024);
-    CompressedDataGLECO<uint32_t>* c_lo_quantity = compressData(lo_quantity, 1024);
-    CompressedDataGLECO<uint32_t>* c_lo_extendedprice = compressData(lo_extendedprice, 1024);
+    CompressedDataL3<uint32_t>* c_lo_orderdate = compressData(lo_orderdate, 1024);
+    CompressedDataL3<uint32_t>* c_lo_discount = compressData(lo_discount, 1024);
+    CompressedDataL3<uint32_t>* c_lo_quantity = compressData(lo_quantity, 1024);
+    CompressedDataL3<uint32_t>* c_lo_extendedprice = compressData(lo_extendedprice, 1024);
 
     auto compress_end = chrono::high_resolution_clock::now();
     double compress_time = chrono::duration<double>(compress_end - compress_start).count();
@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
 
     // Upload updated structure to device
     CUDA_CHECK(cudaMemcpy(c_lo_orderdate->d_self, c_lo_orderdate,
-                          sizeof(CompressedDataGLECO<uint32_t>), cudaMemcpyHostToDevice));
+                          sizeof(CompressedDataL3<uint32_t>), cudaMemcpyHostToDevice));
 
     // Can free d_lo_orderdate_values now
     CUDA_CHECK(cudaFree(d_lo_orderdate_values));

@@ -1,5 +1,5 @@
 /**
- * GLECO Phase 2.2 Test: Facebook 200M uint64 Dataset
+ * L3 Phase 2.2 Test: Facebook 200M uint64 Dataset
  *
  * Real-world benchmark on large-scale sorted dataset
  */
@@ -18,7 +18,7 @@
 
 // External function declarations
 template<typename T>
-void decompressGLECO_Phase2_Bucket(
+void decompressL3_Phase2_Bucket(
     const int32_t* d_start_indices,
     const int32_t* d_end_indices,
     const int32_t* d_model_types,
@@ -72,7 +72,7 @@ std::vector<uint64_t> loadBinaryFile(const char* filename, size_t max_elements =
 
 int main(int argc, char** argv) {
     std::cout << "╔═══════════════════════════════════════════════════════════╗" << std::endl;
-    std::cout << "║   GLECO Phase 2.2: Facebook 200M Dataset Benchmark      ║" << std::endl;
+    std::cout << "║   L3 Phase 2.2: Facebook 200M Dataset Benchmark      ║" << std::endl;
     std::cout << "╚═══════════════════════════════════════════════════════════╝" << std::endl;
     std::cout << std::endl;
 
@@ -193,7 +193,7 @@ int main(int argc, char** argv) {
         std::cout << "\n--- Phase 2.2 Decompression ---" << std::endl;
         std::cout << "Warmup..." << std::flush;
         for (int i = 0; i < 5; ++i) {
-            decompressGLECO_Phase2_Bucket<uint64_t>(
+            decompressL3_Phase2_Bucket<uint64_t>(
                 compressed->d_start_indices,
                 compressed->d_end_indices,
                 compressed->d_model_types,
@@ -222,7 +222,7 @@ int main(int argc, char** argv) {
         for (int i = 0; i < iters; ++i) {
             CUDA_CHECK(cudaEventRecord(start));
 
-            decompressGLECO_Phase2_Bucket<uint64_t>(
+            decompressL3_Phase2_Bucket<uint64_t>(
                 compressed->d_start_indices,
                 compressed->d_end_indices,
                 compressed->d_model_types,

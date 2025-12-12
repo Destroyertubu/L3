@@ -14,7 +14,7 @@ int main() {
     cout << "Loaded " << LO_LEN << " elements" << endl;
 
     // Compress with same partition size as SSB query
-    CompressedDataGLECO<uint32_t>* compressed = compressData(lo_orderdate, 4096);
+    CompressedDataL3<uint32_t>* compressed = compressData(lo_orderdate, 4096);
 
     cout << "Compression info:" << endl;
     cout << "  Num partitions: " << compressed->num_partitions << endl;

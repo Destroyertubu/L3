@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build script for GLECO Phase 2 decompression optimizations
+# Build script for L3 Phase 2 decompression optimizations
 
 set -e
 
@@ -10,7 +10,7 @@ INC_DIR="$PROJECT_ROOT/include"
 BIN_DIR="$PROJECT_ROOT/bin"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║  Building GLECO Phase 2 Optimization Suite                  ║"
+echo "║  Building L3 Phase 2 Optimization Suite                  ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 echo "Project root: $PROJECT_ROOT"

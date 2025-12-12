@@ -1,7 +1,7 @@
 /**
- * GLECO SSB (Star Schema Benchmark) Query Tests
+ * L3 SSB (Star Schema Benchmark) Query Tests
  *
- * Implements all 13 standard SSB queries on GLECO-compressed data
+ * Implements all 13 standard SSB queries on L3-compressed data
  * Tests compression effectiveness and query performance on real analytical workloads
  *
  * Scale Factor: 20
@@ -795,7 +795,7 @@ QueryResult executeQ4_3(const SSBData& ssb) {
 
 int main(int argc, char** argv) {
     std::cout << "╔═══════════════════════════════════════════════════════════╗" << std::endl;
-    std::cout << "║   GLECO SSB (Star Schema Benchmark) Query Tests         ║" << std::endl;
+    std::cout << "║   L3 SSB (Star Schema Benchmark) Query Tests         ║" << std::endl;
     std::cout << "║   Scale Factor: 20                                       ║" << std::endl;
     std::cout << "╚═══════════════════════════════════════════════════════════╝" << std::endl;
     std::cout << std::endl;

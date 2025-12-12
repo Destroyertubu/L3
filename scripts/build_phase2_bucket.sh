@@ -1,10 +1,10 @@
 #!/bin/bash
-# Build script for GLECO Phase 2.2 Bucket-Based Decompression
+# Build script for L3 Phase 2.2 Bucket-Based Decompression
 
 set -e
 
 echo "════════════════════════════════════════════════════════════"
-echo "  Building GLECO Phase 2.2 (Bucket-Based 64-bit Support)"
+echo "  Building L3 Phase 2.2 (Bucket-Based 64-bit Support)"
 echo "════════════════════════════════════════════════════════════"
 
 # Configuration

@@ -4,11 +4,11 @@
 
 ### `compressData()`
 
-Compress data using GLECO learned compression.
+Compress data using L3 learned compression.
 
 ```cpp
 template<typename T>
-CompressedDataGLECO<T>* compressData(
+CompressedDataL3<T>* compressData(
     const std::vector<T>& h_data,
     int partition_size = 2048,
     CompressionStats* stats = nullptr
@@ -32,12 +32,12 @@ auto compressed = compressData(data, 1024);
 
 ### `decompressData()`
 
-Decompress GLECO-compressed data.
+Decompress L3-compressed data.
 
 ```cpp
 template<typename T>
 int decompressData(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     std::vector<T>& h_output,
     DecompressionStats* stats = nullptr
 );
@@ -58,7 +58,7 @@ Free memory allocated for compressed data.
 
 ```cpp
 template<typename T>
-void freeCompressedData(CompressedDataGLECO<T>* data);
+void freeCompressedData(CompressedDataL3<T>* data);
 ```
 
 ## Random Access API
@@ -70,7 +70,7 @@ Device function for random element access.
 ```cpp
 template<typename T>
 __device__ T randomAccessDecompress(
-    const CompressedDataGLECO<T>* compressed_data,
+    const CompressedDataL3<T>* compressed_data,
     int global_idx
 );
 ```
@@ -83,7 +83,7 @@ __device__ T randomAccessDecompress(
 
 **Usage** (in CUDA kernel):
 ```cuda
-__global__ void myKernel(CompressedDataGLECO<uint32_t>* data) {
+__global__ void myKernel(CompressedDataL3<uint32_t>* data) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t value = randomAccessDecompress(data, idx);
     // Use value...
@@ -97,7 +97,7 @@ __global__ void myKernel(CompressedDataGLECO<uint32_t>* data) {
 ```cpp
 template<typename T>
 void evaluatePredicateOnPartitions(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T min_value,
     T max_value,
     std::vector<int>& valid_partitions
@@ -112,13 +112,13 @@ void evaluatePredicateOnPartitions(
 
 ## Data Structures
 
-### `CompressedDataGLECO<T>`
+### `CompressedDataL3<T>`
 
 Main compressed data structure.
 
 ```cpp
 template<typename T>
-struct CompressedDataGLECO {
+struct CompressedDataL3 {
     // Partition metadata
     int32_t* d_start_indices;
     int32_t* d_end_indices;
@@ -158,12 +158,12 @@ struct CompressionStats {
 
 ## Configuration
 
-### `GLECOConfig`
+### `L3Config`
 
 Configuration for compression behavior.
 
 ```cpp
-struct GLECOConfig {
+struct L3Config {
     int partition_size;          // Elements per partition
     bool enable_partition_bounds; // Compute min/max per partition
     bool use_plain_deltas;       // Store deltas uncompressed

@@ -1,5 +1,5 @@
 /**
- * GLECO Specialized Decoders - Template Specialization for Common Delta Widths
+ * L3 Specialized Decoders - Template Specialization for Common Delta Widths
  *
  * Optimizations:
  * - Compile-time constant delta_bits (1, 2, 4, 8, 16)
@@ -10,7 +10,7 @@
 
 #include "bitpack_utils.cuh"
 #include "L3_format.hpp"
-#include "L3_opt.h"
+#include "L3.h"
 #include <cuda_runtime.h>
 #include <cstdint>
 #include <cmath>
@@ -258,6 +258,232 @@ decompressSpecialized(
 }
 
 // ============================================================================
+// Generic Runtime Bit Extraction (for variable bit widths)
+// ============================================================================
+
+__device__ __forceinline__ uint32_t extract_bits_runtime(
+    const uint32_t* smem, int bit_offset, int delta_bits)
+{
+    const int word_idx = bit_offset >> 5;
+    const int bit_in_word = bit_offset & 31;
+
+    // Always use funnel shift for correctness
+    uint32_t lo = smem[word_idx];
+    uint32_t hi = smem[word_idx + 1];
+    uint32_t extracted = __funnelshift_r(lo, hi, bit_in_word);
+
+    uint32_t mask = (delta_bits == 32) ? 0xFFFFFFFFU : ((1U << delta_bits) - 1);
+    return extracted & mask;
+}
+
+// ============================================================================
+// Generic Decoder Kernel (reads per-partition delta_bits)
+// ============================================================================
+
+/**
+ * Compute prediction using polynomial model (Horner's method)
+ * Supports: CONSTANT, LINEAR, POLYNOMIAL2, POLYNOMIAL3, FOR_BITPACK
+ * Uses __double2ll_rn() for banker's rounding - matches V2 partitioner and encoder
+ */
+template<typename T>
+__device__ __forceinline__
+T computePredictionSpecialized(int32_t model_type, double theta0, double theta1,
+                    double theta2, double theta3, int local_idx) {
+    double x = static_cast<double>(local_idx);
+    double predicted;
+
+    switch (model_type) {
+        case MODEL_CONSTANT:  // 0
+            predicted = theta0;
+            break;
+        case MODEL_LINEAR:    // 1
+            predicted = theta0 + theta1 * x;
+            break;
+        case MODEL_POLYNOMIAL2:  // 2 - Horner: a0 + x*(a1 + x*a2)
+            predicted = theta0 + x * (theta1 + x * theta2);
+            break;
+        case MODEL_POLYNOMIAL3:  // 3 - Horner: a0 + x*(a1 + x*(a2 + x*a3))
+            predicted = theta0 + x * (theta1 + x * (theta2 + x * theta3));
+            break;
+        case MODEL_FOR_BITPACK:  // 4 - FOR: base stored in theta0
+            // For FOR+BitPack, return base value directly
+            // Delta will be added as unsigned offset
+            // 64-bit: base stored as bit pattern via __longlong_as_double in encoder
+            // 32-bit: base stored as regular double conversion
+            if constexpr (sizeof(T) == 8) {
+                return static_cast<T>(__double_as_longlong(theta0));
+            } else {
+                return static_cast<T>(__double2ll_rn(theta0));
+            }
+        default:
+            // Fallback to linear for unknown types
+            predicted = theta0 + theta1 * x;
+            break;
+    }
+
+    // Use __double2ll_rn for banker's rounding - matches V2 partitioner and encoder
+    return static_cast<T>(__double2ll_rn(predicted));
+}
+
+template<typename T>
+__global__ void __launch_bounds__(256, 4)
+decompressGeneric(
+    const CompressedDataOpt<T> compressed,
+    T* __restrict__ output)
+{
+    __shared__ struct {
+        int32_t start_idx;
+        int32_t partition_len;
+        int32_t model_type;
+        int32_t delta_bits;
+        int64_t bit_offset_base;
+        double theta0;
+        double theta1;
+        double theta2;
+        double theta3;
+    } s_meta;
+
+    const int partition_idx = blockIdx.x;
+    if (partition_idx >= compressed.num_partitions) return;
+
+    // Load metadata
+    if (threadIdx.x == 0) {
+        s_meta.start_idx = compressed.d_start_indices[partition_idx];
+        s_meta.partition_len = compressed.d_end_indices[partition_idx] - s_meta.start_idx;
+        s_meta.model_type = compressed.d_model_types[partition_idx];
+        s_meta.delta_bits = compressed.d_delta_bits[partition_idx];  // Per-partition!
+        s_meta.bit_offset_base = compressed.d_delta_array_bit_offsets[partition_idx];
+
+        // Load all 4 model parameters
+        int params_idx = partition_idx * 4;
+        s_meta.theta0 = compressed.d_model_params[params_idx];
+        s_meta.theta1 = compressed.d_model_params[params_idx + 1];
+        s_meta.theta2 = compressed.d_model_params[params_idx + 2];
+        s_meta.theta3 = compressed.d_model_params[params_idx + 3];
+    }
+    __syncthreads();
+
+    // Fast path: no deltas
+    if (compressed.delta_array == nullptr || s_meta.delta_bits == 0) {
+        for (int local_idx = threadIdx.x; local_idx < s_meta.partition_len; local_idx += blockDim.x) {
+            int global_idx = s_meta.start_idx + local_idx;
+            if (global_idx >= compressed.total_elements) continue;
+
+            T final_value;
+            if (s_meta.model_type == MODEL_DIRECT_COPY) {
+                final_value = static_cast<T>(0);
+            } else {
+                final_value = computePredictionSpecialized<T>(s_meta.model_type,
+                    s_meta.theta0, s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+            }
+            output[global_idx] = final_value;
+        }
+        return;
+    }
+
+    // Grid-stride loop with runtime bit extraction
+    for (int local_idx = threadIdx.x; local_idx < s_meta.partition_len; local_idx += blockDim.x) {
+        int global_idx = s_meta.start_idx + local_idx;
+        if (global_idx >= compressed.total_elements) continue;
+
+        // Calculate bit offset
+        int64_t bit_offset = s_meta.bit_offset_base +
+                            (static_cast<int64_t>(local_idx) * s_meta.delta_bits);
+        int word_idx = bit_offset >> 5;
+        int bit_in_word = bit_offset & 31;
+
+        T final_value;
+
+        // Handle 64-bit types with deltas > 32 bits
+        if constexpr (sizeof(T) == 8) {
+            if (s_meta.delta_bits > 32) {
+                // Multi-word extraction for 64-bit deltas
+                uint64_t val64 = 0;
+                int bits_remaining = s_meta.delta_bits;
+                int current_word_idx = word_idx;
+                int current_bit_offset = bit_in_word;
+                int shift_amount = 0;
+
+                while (bits_remaining > 0) {
+                    int bits_in_this_word = min(bits_remaining, 32 - current_bit_offset);
+                    uint32_t word = __ldg(&compressed.delta_array[current_word_idx]);
+                    uint32_t mask = (bits_in_this_word == 32) ? ~0U : ((1U << bits_in_this_word) - 1U);
+                    uint32_t extracted_word = (word >> current_bit_offset) & mask;
+
+                    val64 |= (static_cast<uint64_t>(extracted_word) << shift_amount);
+
+                    shift_amount += bits_in_this_word;
+                    bits_remaining -= bits_in_this_word;
+                    current_word_idx++;
+                    current_bit_offset = 0;
+                }
+
+                if (s_meta.model_type == MODEL_DIRECT_COPY) {
+                    final_value = static_cast<T>(val64);
+                } else if (s_meta.model_type == MODEL_FOR_BITPACK) {
+                    // FOR+BitPack: base + unsigned_delta
+                    const T base = computePredictionSpecialized<T>(s_meta.model_type,
+                        s_meta.theta0, s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+                    final_value = base + static_cast<T>(val64);  // Delta is unsigned
+                } else {
+                    // Sign extend the extracted delta
+                    int64_t delta64 = signExtend64(val64, s_meta.delta_bits);
+                    T predicted_T = computePredictionSpecialized<T>(s_meta.model_type,
+                        s_meta.theta0, s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+
+                    final_value = static_cast<T>(static_cast<int64_t>(predicted_T) + delta64);
+                }
+
+                output[global_idx] = final_value;
+                continue;
+            }
+        }
+
+        // Standard path for <= 32-bit deltas
+        // Extract delta (handles cross-word boundaries)
+        uint32_t extracted;
+        if (bit_in_word + s_meta.delta_bits <= 32) {
+            const uint32_t w0 = __ldg(&compressed.delta_array[word_idx]);
+            const uint32_t mask = (s_meta.delta_bits == 32) ? 0xFFFFFFFFU : ((1U << s_meta.delta_bits) - 1U);
+            extracted = (w0 >> bit_in_word) & mask;
+        } else {
+            const uint32_t w0 = __ldg(&compressed.delta_array[word_idx]);
+            const uint32_t w1 = __ldg(&compressed.delta_array[word_idx + 1]);
+            const uint64_t combined = (static_cast<uint64_t>(w1) << 32) | w0;
+            const uint32_t mask = (s_meta.delta_bits == 32) ? 0xFFFFFFFFU : ((1U << s_meta.delta_bits) - 1U);
+            extracted = static_cast<uint32_t>((combined >> bit_in_word) & mask);
+        }
+
+        if (s_meta.model_type == MODEL_DIRECT_COPY) {
+            if constexpr (std::is_signed<T>::value) {
+                int32_t delta = signExtend(extracted, s_meta.delta_bits);
+                final_value = static_cast<T>(delta);
+            } else {
+                final_value = static_cast<T>(extracted);
+            }
+        } else if (s_meta.model_type == MODEL_FOR_BITPACK) {
+            // FOR+BitPack: base + unsigned_delta (no sign extension)
+            const T base = computePredictionSpecialized<T>(s_meta.model_type,
+                s_meta.theta0, s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+            final_value = base + static_cast<T>(extracted);  // Delta is unsigned
+        } else {
+            // Other models: prediction + signed delta
+            int32_t delta = signExtend(extracted, s_meta.delta_bits);
+            T predicted_T = computePredictionSpecialized<T>(s_meta.model_type,
+                s_meta.theta0, s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+
+            if constexpr (std::is_signed<T>::value) {
+                final_value = predicted_T + static_cast<T>(delta);
+            } else {
+                final_value = static_cast<T>(static_cast<int64_t>(predicted_T) + delta);
+            }
+        }
+
+        output[global_idx] = final_value;
+    }
+}
+
+// ============================================================================
 // Dispatcher - Select Best Kernel Based on Delta Width
 // ============================================================================
 
@@ -270,75 +496,19 @@ void launchDecompressSpecialized(
 {
     if (compressed.num_partitions == 0) return;
 
-    const int threads_per_block = 128;
     const int num_blocks = compressed.num_partitions;
 
-    // Dispatch to specialized kernel based on delta_bits
-    switch (delta_bits) {
-        case 1:
-            decompressSpecialized<T, 1><<<num_blocks, threads_per_block, 0, stream>>>(
-                compressed, output);
-            break;
-        case 2:
-            decompressSpecialized<T, 2><<<num_blocks, threads_per_block, 0, stream>>>(
-                compressed, output);
-            break;
-        case 4:
-            decompressSpecialized<T, 4><<<num_blocks, threads_per_block, 0, stream>>>(
-                compressed, output);
-            break;
-        case 6:
-            decompressSpecialized<T, 6><<<num_blocks, threads_per_block, 0, stream>>>(
-                compressed, output);
-            break;
-        case 8:
-            decompressSpecialized<T, 8><<<num_blocks, threads_per_block, 0, stream>>>(
-                compressed, output);
-            break;
-        case 9:
-            decompressSpecialized<T, 9><<<num_blocks, threads_per_block, 0, stream>>>(
-                compressed, output);
-            break;
-        case 16:
-            decompressSpecialized<T, 16><<<num_blocks, threads_per_block, 0, stream>>>(
-                compressed, output);
-            break;
-        case 17:
-            decompressSpecialized<T, 17><<<num_blocks, threads_per_block, 0, stream>>>(
-                compressed, output);
-            break;
-        case 19:
-            decompressSpecialized<T, 19><<<num_blocks, threads_per_block, 0, stream>>>(
-                compressed, output);
-            break;
-        case 32:
-            decompressSpecialized<T, 32><<<num_blocks, threads_per_block, 0, stream>>>(
-                compressed, output);
-            break;
-        default:
-            // Fall back to generic kernel for uncommon widths
-            // Use nearest specialized version for performance
-            if (delta_bits < 6) {
-                decompressSpecialized<T, 4><<<num_blocks, threads_per_block, 0, stream>>>(
-                    compressed, output);
-            } else if (delta_bits < 12) {
-                decompressSpecialized<T, 9><<<num_blocks, threads_per_block, 0, stream>>>(
-                    compressed, output);
-            } else if (delta_bits < 24) {
-                decompressSpecialized<T, 17><<<num_blocks, threads_per_block, 0, stream>>>(
-                    compressed, output);
-            } else {
-                decompressSpecialized<T, 32><<<num_blocks, threads_per_block, 0, stream>>>(
-                    compressed, output);
-            }
-            break;
-    }
+    // Always use generic kernel that reads per-partition delta_bits
+    // This handles mixed bit-width data correctly
+    // Specialized template kernels only work when ALL partitions have the same bit width
+    decompressGeneric<<<num_blocks, 256, 0, stream>>>(
+        compressed, output);
 }
 
-// Wrapper for CompressedDataGLECO format
+// Wrapper for CompressedDataL3 format
 template<typename T>
 void launchDecompressSpecialized(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     int delta_bits,
     cudaStream_t stream = 0)
@@ -359,10 +529,10 @@ void launchDecompressSpecialized(
 }
 
 // Explicit instantiations
-template void launchDecompressSpecialized<int32_t>(const CompressedDataGLECO<int32_t>*, int32_t*, int, cudaStream_t);
-template void launchDecompressSpecialized<uint32_t>(const CompressedDataGLECO<uint32_t>*, uint32_t*, int, cudaStream_t);
-template void launchDecompressSpecialized<int64_t>(const CompressedDataGLECO<int64_t>*, int64_t*, int, cudaStream_t);
-template void launchDecompressSpecialized<uint64_t>(const CompressedDataGLECO<uint64_t>*, uint64_t*, int, cudaStream_t);
+template void launchDecompressSpecialized<int32_t>(const CompressedDataL3<int32_t>*, int32_t*, int, cudaStream_t);
+template void launchDecompressSpecialized<uint32_t>(const CompressedDataL3<uint32_t>*, uint32_t*, int, cudaStream_t);
+template void launchDecompressSpecialized<int64_t>(const CompressedDataL3<int64_t>*, int64_t*, int, cudaStream_t);
+template void launchDecompressSpecialized<uint64_t>(const CompressedDataL3<uint64_t>*, uint64_t*, int, cudaStream_t);
 
 template void launchDecompressSpecialized<int32_t>(const CompressedDataOpt<int32_t>&, int32_t*, int, cudaStream_t);
 template void launchDecompressSpecialized<uint32_t>(const CompressedDataOpt<uint32_t>&, uint32_t*, int, cudaStream_t);

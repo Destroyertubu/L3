@@ -1,9 +1,9 @@
 /**
- * Basic GLECO Compression Example
+ * Basic L3 Compression Example
  *
  * Demonstrates:
  * - Creating sample data
- * - Compressing with GLECO
+ * - Compressing with L3
  * - Decompressing and verifying
  * - Printing statistics
  */
@@ -14,7 +14,7 @@
 #include <iomanip>
 
 int main() {
-    std::cout << "=== GLECO Basic Compression Example ===" << std::endl;
+    std::cout << "=== L3 Basic Compression Example ===" << std::endl;
 
     // 1. Create sample data (linear pattern for good compression)
     const int N = 1000000;

@@ -1,6 +1,6 @@
-# Contributing to GLECO
+# Contributing to L3
 
-Thank you for your interest in contributing to GLECO! This document provides guidelines for contributing to the project.
+Thank you for your interest in contributing to L3! This document provides guidelines for contributing to the project.
 
 ## Table of Contents
 
@@ -100,7 +100,7 @@ __global__ void decompressKernel(
 
 ### Naming Conventions
 
-- Classes: `PascalCase` (e.g., `CompressedDataGLECO`)
+- Classes: `PascalCase` (e.g., `CompressedDataL3`)
 - Functions: `camelCase` (e.g., `compressData`)
 - Variables: `snake_case` (e.g., `partition_size`)
 - Constants: `UPPER_SNAKE_CASE` (e.g., `MAX_PARTITION_SIZE`)
@@ -115,7 +115,7 @@ __global__ void decompressKernel(
 **Example:**
 ```cpp
 /**
- * Compress data using GLECO learned compression
+ * Compress data using L3 learned compression
  *
  * @param h_data Input data vector
  * @param partition_size Elements per partition (default: 2048)
@@ -127,7 +127,7 @@ __global__ void decompressKernel(
  * auto compressed = compressData(data, 1024);
  */
 template<typename T>
-CompressedDataGLECO<T>* compressData(
+CompressedDataL3<T>* compressData(
     const std::vector<T>& h_data,
     int partition_size = 2048,
     CompressionStats* stats = nullptr
@@ -240,4 +240,4 @@ Improves Q1.1 performance by 2.3x
 
 ---
 
-Thank you for contributing to GLECO! 🚀
+Thank you for contributing to L3! 🚀

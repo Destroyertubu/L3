@@ -4,7 +4,7 @@ This directory is for storing SSB (Star Schema Benchmark) data files.
 
 ## Data Generation Required
 
-The GLECO project requires SSB benchmark data to run tests. The data must be generated using the SSB data generator tool.
+The L3 project requires SSB benchmark data to run tests. The data must be generated using the SSB data generator tool.
 
 ### Quick Start
 

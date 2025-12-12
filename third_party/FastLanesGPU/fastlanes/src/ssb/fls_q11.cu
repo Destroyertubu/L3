@@ -151,15 +151,48 @@ void query(int*                         lo_orderdate,
 	int tile_items = BLOCK_THREADS * ITEMS_PER_THREAD;
 	int num_blocks = (query_mtd.ssb.n_tup_line_order + tile_items - 1) / tile_items;
 
+	// Add timing
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
+	// Warmup run
 	if (version == 1) {
 		QueryKernel_v1<BLOCK_THREADS, ITEMS_PER_THREAD><<<num_blocks, BLOCK_THREADS>>>(
 		    lo_orderdate, lo_discount, lo_quantity, lo_extendedprice, query_mtd.ssb, d_sum);
 	} else if (version == 2) {
 		QueryKernel_v2<BLOCK_THREADS, ITEMS_PER_THREAD><<<num_blocks, BLOCK_THREADS>>>(
 		    lo_orderdate, lo_discount, lo_quantity, lo_extendedprice, query_mtd.ssb, d_sum);
-	} else {
-		throw std::runtime_error("this version does not exist");
 	}
+	cudaDeviceSynchronize();
+	cudaMemset(d_sum, 0, sizeof(long long));
+
+	// Timed runs
+	float total_time = 0.0f;
+	const int NUM_RUNS = 3;
+	for (int run = 0; run < NUM_RUNS; run++) {
+		cudaMemset(d_sum, 0, sizeof(long long));
+		cudaEventRecord(start);
+
+		if (version == 1) {
+			QueryKernel_v1<BLOCK_THREADS, ITEMS_PER_THREAD><<<num_blocks, BLOCK_THREADS>>>(
+			    lo_orderdate, lo_discount, lo_quantity, lo_extendedprice, query_mtd.ssb, d_sum);
+		} else if (version == 2) {
+			QueryKernel_v2<BLOCK_THREADS, ITEMS_PER_THREAD><<<num_blocks, BLOCK_THREADS>>>(
+			    lo_orderdate, lo_discount, lo_quantity, lo_extendedprice, query_mtd.ssb, d_sum);
+		} else {
+			throw std::runtime_error("this version does not exist");
+		}
+
+		cudaEventRecord(stop);
+		cudaEventSynchronize(stop);
+		float ms;
+		cudaEventElapsedTime(&ms, start, stop);
+		total_time += ms;
+		std::cout << "Run " << run + 1 << ": " << ms << " ms" << std::endl;
+	}
+
+	std::cout << "Average kernel time: " << (total_time / NUM_RUNS) << " ms" << std::endl;
 
 	unsigned long long revenue;
 	CubDebugExit(cudaMemcpy(&revenue, d_sum, sizeof(long long), cudaMemcpyDeviceToHost));
@@ -169,6 +202,8 @@ void query(int*                         lo_orderdate,
 	std::cout << "Revenue: " << revenue << std::endl;
 	//ASSERT_EQ(revenue, query_mtd.result);
 
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
 	CLEANUP(d_sum);
 }
 

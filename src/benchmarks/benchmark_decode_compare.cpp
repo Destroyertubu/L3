@@ -1,5 +1,5 @@
 /**
- * GLECO Decompression: Baseline vs Optimized Comparison
+ * L3 Decompression: Baseline vs Optimized Comparison
  *
  * Compares performance of baseline and optimized kernels
  * Reports speedup and validates correctness
@@ -17,7 +17,7 @@
 // Forward declarations
 template<typename T>
 void launchDecompressWarpOpt(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     cudaStream_t stream
 );
@@ -33,7 +33,7 @@ void launchDecompressWarpOpt(
 
 // Forward declaration of optimized decompression
 template<typename T>
-void decompressGLECO_Optimized(
+void decompressL3_Optimized(
     const int32_t* d_start_indices,
     const int32_t* d_end_indices,
     const int32_t* d_model_types,
@@ -150,7 +150,7 @@ CompareResult compareImplementations(
     // Optimized benchmark (only for 8/16 bit)
     if (target_bits == 8 || target_bits == 16) {
         for (int i = 0; i < warmup; i++) {
-            decompressGLECO_Optimized(
+            decompressL3_Optimized(
                 compressed->d_start_indices,
                 compressed->d_end_indices,
                 compressed->d_model_types,
@@ -169,7 +169,7 @@ CompareResult compareImplementations(
         std::vector<float> opt_times;
         for (int i = 0; i < iters; i++) {
             CUDA_CHECK(cudaEventRecord(start));
-            decompressGLECO_Optimized(
+            decompressL3_Optimized(
                 compressed->d_start_indices,
                 compressed->d_end_indices,
                 compressed->d_model_types,
@@ -215,7 +215,7 @@ CompareResult compareImplementations(
 
 int main() {
     std::cout << "╔══════════════════════════════════════════════════════════════╗\n";
-    std::cout << "║  GLECO Decompression: Baseline vs Optimized                 ║\n";
+    std::cout << "║  L3 Decompression: Baseline vs Optimized                 ║\n";
     std::cout << "╚══════════════════════════════════════════════════════════════╝\n\n";
 
     std::vector<int> bit_widths = {8, 16};

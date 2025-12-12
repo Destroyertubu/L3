@@ -1,8 +1,8 @@
-# Quick Start: Running FastLanesGPU with GLECO Data
+# Quick Start: Running FastLanesGPU with L3 Data
 
 ## Data Location
 
-GLECO SSB data is located at:
+L3 SSB data is located at:
 ```
 /root/autodl-tmp/code/data/SSB/L3/ssb_data/
 ```
@@ -83,4 +83,4 @@ If you encounter file not found errors:
 2. Verify permissions: `chmod 644 /root/autodl-tmp/code/data/SSB/L3/ssb_data/*.bin`
 3. Rebuild the project: `make clean && make -j8`
 
-For detailed information, see `GLECO_DATA_INTEGRATION.md`
+For detailed information, see `L3_DATA_INTEGRATION.md`

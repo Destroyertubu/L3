@@ -32,7 +32,7 @@ using namespace std;
 
 namespace fastlanes::ssb {
 
-#define SF 20
+#define SF 10
 
 #if SF == 10
 class SSB {
@@ -58,26 +58,26 @@ public:
 	static constexpr uint8_t lo_discount_bw  = 4;
 
 	static constexpr int32_t lo_partkey_min = 1;
-	static constexpr int32_t lo_partkey_max = 200000;
+	static constexpr int32_t lo_partkey_max = 800000;
 	static constexpr uint8_t lo_partkey_bw  = 20;
 
 	static constexpr int32_t lo_suppkey_min       = 1;
-	static constexpr int32_t lo_suppkey_max       = 2000;
+	static constexpr int32_t lo_suppkey_max       = 20000;
 	static constexpr uint8_t lo_real_suppkey_bw   = 15;
 	static constexpr uint8_t lo_chosen_suppkey_bw = 16;
 
-	static constexpr int32_t lo_revenue_min = 81360;
-	static constexpr int32_t lo_revenue_max = 10474950;
-	static constexpr uint8_t lo_revenue_bw  = 24;
+	static constexpr int32_t lo_revenue_min = 0;
+	static constexpr int32_t lo_revenue_max = 55450;
+	static constexpr uint8_t lo_revenue_bw  = 16;
 
 	static constexpr int32_t lo_custkey_min       = 1;
-	static constexpr int32_t lo_custkey_max       = 299999;
+	static constexpr int32_t lo_custkey_max       = 300000;
 	static constexpr uint8_t lo_real_custkey_bw   = 19;
 	static constexpr uint8_t lo_chosen_custkey_bw = 20;
 
-	static constexpr int32_t lo_supplycost_min       = 54060;
-	static constexpr int32_t lo_supplycost_max       = 125939;
-	static constexpr uint8_t lo_supplycost_bw        = 17;
+	static constexpr int32_t lo_supplycost_min       = 1;
+	static constexpr int32_t lo_supplycost_max       = 1000;
+	static constexpr uint8_t lo_supplycost_bw        = 10;
 	static constexpr uint8_t lo_chosen_supplycost_bw = 20;
 
 	int32_t n_vec;
@@ -153,7 +153,7 @@ public:
 
 	static constexpr int32_t lo_partkey_min = 1;
 	static constexpr int32_t lo_partkey_max = 1400000;
-	static constexpr uint8_t lo_partkey_bw  = 21;
+	static constexpr uint8_t lo_partkey_bw  = 24;
 
 	static constexpr int32_t lo_suppkey_min       = 1;
 	static constexpr int32_t lo_suppkey_max       = 40000;
@@ -204,8 +204,8 @@ inline Dir         supplier_dir {3, table_path + "supplier.tbl"};
 } // namespace sample_data::ssb_1
 
 namespace sample_data::ssb_10 {
-inline std::string relative_path = std::string("/gpu/data/ssb/data/s10") + std::string("/");
-inline std::string path          = CMAKE_SOURCE_DIR + relative_path;
+inline std::string relative_path = std::string("/root/autodl-tmp/test/ssb_data") + std::string("/");
+inline std::string path          = relative_path;
 inline std::string table_path    = path;
 inline std::string result_path   = path + "result/";
 inline std::string binary_path   = path + "binary/";

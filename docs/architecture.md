@@ -1,8 +1,8 @@
-# GLECO Architecture
+# L3 Architecture
 
 ## System Overview
 
-GLECO consists of three main components:
+L3 consists of three main components:
 
 ### 1. Compression Pipeline
 
@@ -54,7 +54,7 @@ Raw Data → Partitioning → Model Fitting → Delta Encoding → Bit Packing �
 ### Compressed Data Structure (SoA)
 
 ```cpp
-struct CompressedDataGLECO<T> {
+struct CompressedDataL3<T> {
     // Partition metadata arrays
     int32_t* d_start_indices;       // Start index per partition
     int32_t* d_end_indices;         // End index per partition

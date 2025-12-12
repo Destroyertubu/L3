@@ -27,12 +27,12 @@
 
 // Forward declarations
 template<typename T>
-void decompressGLECO_Optimized(
+void decompressL3_Optimized(
     const int32_t*, const int32_t*, const int32_t*, const double*,
     const int32_t*, const int64_t*, const uint32_t*, int, int, T*, int);
 
 template<typename T>
-void decompressGLECO_Phase2(
+void decompressL3_Phase2(
     const int32_t*, const int32_t*, const int32_t*, const double*,
     const int32_t*, const int64_t*, const uint32_t*, int, int, T*, int, bool);
 
@@ -87,7 +87,7 @@ float benchmarkKernel(
     void (*kernel_func)(const int32_t*, const int32_t*, const int32_t*, const double*,
                        const int32_t*, const int64_t*, const uint32_t*,
                        int, int, T*, int),
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     int total_elements,
     int avg_delta_bits,
@@ -152,7 +152,7 @@ float benchmarkKernel(
 
 template<typename T>
 float benchmarkPhase2(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     int total_elements,
     int avg_delta_bits,
@@ -165,7 +165,7 @@ float benchmarkPhase2(
 
     // Warmup
     for (int i = 0; i < 3; i++) {
-        decompressGLECO_Phase2(
+        decompressL3_Phase2(
             compressed->d_start_indices,
             compressed->d_end_indices,
             compressed->d_model_types,
@@ -187,7 +187,7 @@ float benchmarkPhase2(
     for (int i = 0; i < num_iters; i++) {
         CUDA_CHECK(cudaEventRecord(start));
 
-        decompressGLECO_Phase2(
+        decompressL3_Phase2(
             compressed->d_start_indices,
             compressed->d_end_indices,
             compressed->d_model_types,
@@ -237,7 +237,7 @@ bool verifyCorrectness(const std::vector<T>& original, T* d_output, size_t n) {
 int main() {
     std::cout << "\n";
     std::cout << "╔══════════════════════════════════════════════════════════════╗\n";
-    std::cout << "║  GLECO Phase 2 Decompression Benchmark                      ║\n";
+    std::cout << "║  L3 Phase 2 Decompression Benchmark                      ║\n";
     std::cout << "╚══════════════════════════════════════════════════════════════╝\n";
     std::cout << "\n";
 
@@ -290,7 +290,7 @@ int main() {
                 // Benchmark Phase 1 (baseline)
                 std::cout << "[1/3] Phase 1 (Optimized)...";
                 float time_phase1 = benchmarkKernel<uint64_t>(
-                    decompressGLECO_Optimized<uint64_t>,
+                    decompressL3_Optimized<uint64_t>,
                     compressed, d_output, n,
                     static_cast<int>(stats.avg_delta_bits)
                 );

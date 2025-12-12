@@ -1,4 +1,4 @@
-// SSB Query 2.3 with GLECO2 Compression - RANDOM ACCESS VERSION (_2push version)
+// SSB Query 2.3 with L32 Compression - RANDOM ACCESS VERSION (_2push version)
 // Query: SELECT SUM(lo_revenue), d_year, p_brand1
 //        FROM lineorder, date, part, supplier
 //        WHERE lo_orderdate = d_datekey
@@ -54,7 +54,7 @@ struct GroupKey {
 // Device function for random access decompression
 template<typename T>
 __device__ T randomAccessDecompress(
-    const CompressedDataGLECO<T>* compressed_data,
+    const CompressedDataL3<T>* compressed_data,
     int global_idx) {
 
     // Binary search to find partition
@@ -103,7 +103,7 @@ __device__ T randomAccessDecompress(
 // Stage 1: Scan lo_partkey and filter by p_brand1 = 239
 template<typename T>
 __global__ void ssb_q23_stage1_scan(
-    const CompressedDataGLECO<T>* c_partkey,
+    const CompressedDataL3<T>* c_partkey,
     const PartEntry* d_part_ht,
     int num_entries,
     Candidate* d_candidates,
@@ -172,9 +172,9 @@ __global__ void ssb_q23_stage1_scan(
 // Stage 2: Random access lo_suppkey, lo_orderdate, lo_revenue
 template<typename T>
 __global__ void ssb_q23_stage2_random_access(
-    const CompressedDataGLECO<T>* c_suppkey,
-    const CompressedDataGLECO<T>* c_orderdate,
-    const CompressedDataGLECO<T>* c_revenue,
+    const CompressedDataL3<T>* c_suppkey,
+    const CompressedDataL3<T>* c_orderdate,
+    const CompressedDataL3<T>* c_revenue,
     const SupplierEntry* d_supplier_ht,
     const DateEntry* d_date_ht,
     const Candidate* d_candidates,
@@ -232,7 +232,7 @@ __global__ void ssb_q23_stage2_random_access(
 
 int main(int argc, char** argv) {
     cout << "========================================================================" << endl;
-    cout << "  SSB Query 2.3 with GLECO2 Compression - RANDOM ACCESS VERSION" << endl;
+    cout << "  SSB Query 2.3 with L32 Compression - RANDOM ACCESS VERSION" << endl;
     cout << "========================================================================" << endl;
     cout << endl;
 
@@ -291,15 +291,15 @@ int main(int argc, char** argv) {
     cout << "✓ Hash tables built" << endl;
     cout << endl;
 
-    cout << "Compressing LINEORDER columns with GLECO2..." << endl;
+    cout << "Compressing LINEORDER columns with L32..." << endl;
     
     
     auto compress_start = chrono::high_resolution_clock::now();
 
-    CompressedDataGLECO<uint32_t>* c_orderdate = compressData(lo_orderdate, 1024);
-    CompressedDataGLECO<uint32_t>* c_partkey = compressData(lo_partkey, 1024);
-    CompressedDataGLECO<uint32_t>* c_suppkey = compressData(lo_suppkey, 1024);
-    CompressedDataGLECO<uint32_t>* c_revenue = compressData(lo_revenue, 1024);
+    CompressedDataL3<uint32_t>* c_orderdate = compressData(lo_orderdate, 1024);
+    CompressedDataL3<uint32_t>* c_partkey = compressData(lo_partkey, 1024);
+    CompressedDataL3<uint32_t>* c_suppkey = compressData(lo_suppkey, 1024);
+    CompressedDataL3<uint32_t>* c_revenue = compressData(lo_revenue, 1024);
 
     auto compress_end = chrono::high_resolution_clock::now();
     double compress_time = chrono::duration<double>(compress_end - compress_start).count();

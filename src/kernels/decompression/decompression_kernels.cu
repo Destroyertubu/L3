@@ -1,42 +1,25 @@
 #include "bitpack_utils.cuh"
 #include "L3_format.hpp"
+#include "L3.h"
 #include <cuda_runtime.h>
 #include <cstdint>
 #include <cmath>
 
 // ModelType enum is defined in L3_format.hpp
+// CompressedDataOpt is defined in L3_opt.h
 
 // Partition metadata optimized for GPU (coalesced access)
+// Extended to support all polynomial models and FOR+BitPack
 struct PartitionMeta {
     int32_t start_idx;
     int32_t partition_len;
     int32_t model_type;
     int32_t delta_bits;
-    double theta0;
-    double theta1;
+    double theta0;   // Linear: intercept, FOR: base value
+    double theta1;   // Linear: slope
+    double theta2;   // Polynomial2: quadratic coefficient
+    double theta3;   // Polynomial3: cubic coefficient
     int64_t bit_offset_base;
-};
-
-// Compressed data structure (compatible with original)
-template<typename T>
-struct CompressedDataOpt {
-    // Metadata arrays (SoA layout)
-    int32_t* d_start_indices;
-    int32_t* d_end_indices;
-    int32_t* d_model_types;
-    double* d_model_params;  // [theta0, theta1, theta2, theta3] for each partition
-    int32_t* d_delta_bits;
-    int64_t* d_delta_array_bit_offsets;
-
-    // Bit-packed delta array
-    uint32_t* delta_array;
-
-    // Optional: pre-unpacked deltas for maximum throughput
-    int64_t* d_plain_deltas;
-
-    // Metadata
-    int num_partitions;
-    int total_elements;
 };
 
 // Apply delta to predicted value
@@ -47,6 +30,51 @@ __device__ __forceinline__ T applyDelta(T predicted, int64_t delta) {
     } else {
         return static_cast<T>(static_cast<int64_t>(predicted) + delta);
     }
+}
+
+/**
+ * Compute prediction using polynomial model (Horner's method)
+ * Supports: CONSTANT, LINEAR, POLYNOMIAL2, POLYNOMIAL3, FOR_BITPACK
+ * Uses __double2ll_rn() for banker's rounding - matches V2 partitioner and encoder
+ */
+template<typename T>
+__device__ __forceinline__
+T computePrediction(int32_t model_type, double theta0, double theta1,
+                    double theta2, double theta3, int local_idx) {
+    double x = static_cast<double>(local_idx);
+    double predicted;
+
+    switch (model_type) {
+        case MODEL_CONSTANT:  // 0
+            predicted = theta0;
+            break;
+        case MODEL_LINEAR:    // 1
+            predicted = theta0 + theta1 * x;
+            break;
+        case MODEL_POLYNOMIAL2:  // 2 - Horner: a0 + x*(a1 + x*a2)
+            predicted = theta0 + x * (theta1 + x * theta2);
+            break;
+        case MODEL_POLYNOMIAL3:  // 3 - Horner: a0 + x*(a1 + x*(a2 + x*a3))
+            predicted = theta0 + x * (theta1 + x * (theta2 + x * theta3));
+            break;
+        case MODEL_FOR_BITPACK:  // 4 - FOR: base stored in theta0
+            // For FOR+BitPack, return base value directly
+            // Delta will be added as unsigned offset
+            // 64-bit: base stored as bit pattern via __longlong_as_double in encoder
+            // 32-bit: base stored as regular double conversion
+            if constexpr (sizeof(T) == 8) {
+                return static_cast<T>(__double_as_longlong(theta0));
+            } else {
+                return static_cast<T>(__double2ll_rn(theta0));
+            }
+        default:
+            // Fallback to linear for unknown types
+            predicted = theta0 + theta1 * x;
+            break;
+    }
+
+    // Use __double2ll_rn for banker's rounding - matches V2 partitioner and encoder
+    return static_cast<T>(__double2ll_rn(predicted));
 }
 
 // ============================================================================
@@ -91,9 +119,12 @@ decompressPartitionsOptimized(
         s_meta.delta_bits = compressed_data.d_delta_bits[partition_idx];
         s_meta.bit_offset_base = compressed_data.d_delta_array_bit_offsets[partition_idx];
 
+        // Load all 4 model parameters (supports POLYNOMIAL2/3 and FOR_BITPACK)
         const int params_idx = partition_idx * 4;
         s_meta.theta0 = compressed_data.d_model_params[params_idx];
         s_meta.theta1 = compressed_data.d_model_params[params_idx + 1];
+        s_meta.theta2 = compressed_data.d_model_params[params_idx + 2];
+        s_meta.theta3 = compressed_data.d_model_params[params_idx + 3];
     }
 
     __syncthreads();
@@ -110,9 +141,9 @@ decompressPartitionsOptimized(
             if (s_meta.model_type == MODEL_DIRECT_COPY) {
                 final_value = static_cast<T>(compressed_data.d_plain_deltas[global_idx]);
             } else {
-                // Linear model prediction
-                const double predicted = fma(s_meta.theta1, static_cast<double>(local_idx), s_meta.theta0);
-                const T predicted_T = static_cast<T>(round(predicted));
+                // Use computePrediction for all model types (LINEAR, POLY2, POLY3, FOR)
+                const T predicted_T = computePrediction<T>(s_meta.model_type, s_meta.theta0,
+                    s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
                 const int64_t delta = compressed_data.d_plain_deltas[global_idx];
                 final_value = applyDelta(predicted_T, delta);
             }
@@ -133,8 +164,9 @@ decompressPartitionsOptimized(
             if (s_meta.model_type == MODEL_DIRECT_COPY) {
                 final_value = static_cast<T>(0);
             } else {
-                const double predicted = fma(s_meta.theta1, static_cast<double>(local_idx), s_meta.theta0);
-                final_value = static_cast<T>(round(predicted));
+                // Use computePrediction for all model types
+                final_value = computePrediction<T>(s_meta.model_type, s_meta.theta0,
+                    s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
             }
 
             output[global_idx] = final_value;
@@ -148,11 +180,12 @@ decompressPartitionsOptimized(
     const int num_warps = blockDim.x / WARP_SIZE;
 
     // Process partition in chunks that fit in shared memory
+    // All warps cooperate on the same chunk, then move to next chunk
     const int max_elements_per_chunk = (SMEM_USABLE_WORDS * 32) / max(s_meta.delta_bits, 1);
 
-    for (int chunk_start = warp_id * max_elements_per_chunk;
+    for (int chunk_start = 0;
          chunk_start < s_meta.partition_len;
-         chunk_start += num_warps * max_elements_per_chunk)
+         chunk_start += max_elements_per_chunk)
     {
         const int chunk_size = min(max_elements_per_chunk, s_meta.partition_len - chunk_start);
 
@@ -162,23 +195,22 @@ decompressPartitionsOptimized(
         const int words_needed = computeWordsNeeded(chunk_size, s_meta.delta_bits);
         const int words_to_load = min(words_needed + 1, SMEM_BUFFER_WORDS);  // +1 for cross-word reads
 
-        // Warp-collective load into shared memory
+        // All threads cooperate to load data into shared memory
         const int64_t chunk_bit_offset = s_meta.bit_offset_base +
                                         (static_cast<int64_t>(chunk_start) * s_meta.delta_bits);
         const int64_t chunk_word_offset = chunk_bit_offset >> 5;
         const int local_bit_offset_base = chunk_bit_offset & 31;
 
-        warpLoadToShared<SMEM_BUFFER_WORDS>(
-            compressed_data.delta_array,
-            chunk_word_offset,
-            s_delta_buffer,
-            lane_id
-        );
+        // Cooperative load using all threads in the block
+        for (int w = threadIdx.x; w < words_to_load; w += blockDim.x) {
+            s_delta_buffer[w] = __ldg(&compressed_data.delta_array[chunk_word_offset + w]);
+        }
 
         __syncthreads();  // Ensure shared memory is populated
 
-        // Each thread unpacks its elements from shared memory
-        for (int i = lane_id; i < chunk_size; i += WARP_SIZE) {
+        // All warps process elements from the same chunk
+        // Each thread handles multiple elements with block-strided access
+        for (int i = threadIdx.x; i < chunk_size; i += blockDim.x) {
             const int local_idx = chunk_start + i;
             const int global_idx = s_meta.start_idx + local_idx;
 
@@ -186,32 +218,142 @@ decompressPartitionsOptimized(
 
             // Extract delta from shared memory
             const int local_bit_offset = local_bit_offset_base + i * s_meta.delta_bits;
-            const uint32_t extracted = extractBitsFromShared(s_delta_buffer, local_bit_offset, s_meta.delta_bits);
 
             T final_value;
 
-            if (s_meta.model_type == MODEL_DIRECT_COPY) {
-                // Direct copy: extracted value is the final value
-                // For signed types, we need sign extension
-                if constexpr (std::is_signed<T>::value) {
-                    const int32_t signed_val = signExtend(extracted, s_meta.delta_bits);
-                    final_value = static_cast<T>(signed_val);
+            // Handle 64-bit types with deltas > 32 bits
+            if constexpr (sizeof(T) == 8) {
+                if (s_meta.delta_bits > 32) {
+                    // Multi-word extraction for 64-bit deltas
+                    const int word_idx = local_bit_offset >> 5;
+                    const int bit_in_word = local_bit_offset & 31;
+
+                    uint64_t val64 = 0;
+                    int bits_remaining = s_meta.delta_bits;
+                    int current_word_idx = word_idx;
+                    int current_bit_offset = bit_in_word;
+                    int shift_amount = 0;
+
+                    while (bits_remaining > 0) {
+                        int bits_in_this_word = min(bits_remaining, 32 - current_bit_offset);
+                        uint32_t word = s_delta_buffer[current_word_idx];
+                        uint32_t mask = (bits_in_this_word == 32) ? ~0U : ((1U << bits_in_this_word) - 1U);
+                        uint32_t extracted_word = (word >> current_bit_offset) & mask;
+
+                        val64 |= (static_cast<uint64_t>(extracted_word) << shift_amount);
+
+                        shift_amount += bits_in_this_word;
+                        bits_remaining -= bits_in_this_word;
+                        current_word_idx++;
+                        current_bit_offset = 0;
+                    }
+
+                    if (s_meta.model_type == MODEL_DIRECT_COPY) {
+                        final_value = static_cast<T>(val64);
+                    } else if (s_meta.model_type == MODEL_FOR_BITPACK) {
+                        // FOR+BitPack: base + unsigned_delta
+                        const T base = computePrediction<T>(s_meta.model_type, s_meta.theta0,
+                            s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+                        final_value = base + static_cast<T>(val64);  // Delta is unsigned
+                    } else {
+                        // Sign extend and apply model using computePrediction
+                        int64_t delta64 = signExtend64(val64, s_meta.delta_bits);
+                        const T predicted_T = computePrediction<T>(s_meta.model_type, s_meta.theta0,
+                            s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+                        final_value = applyDelta(predicted_T, delta64);
+                    }
                 } else {
-                    final_value = static_cast<T>(extracted);
+                    // Standard 32-bit path for 64-bit types
+                    const uint32_t extracted = extractBitsFromShared(s_delta_buffer, local_bit_offset, s_meta.delta_bits);
+
+                    if (s_meta.model_type == MODEL_DIRECT_COPY) {
+                        final_value = static_cast<T>(extracted);
+                    } else if (s_meta.model_type == MODEL_FOR_BITPACK) {
+                        // FOR+BitPack: base + unsigned_delta
+                        const T base = computePrediction<T>(s_meta.model_type, s_meta.theta0,
+                            s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+                        final_value = base + static_cast<T>(extracted);  // Delta is unsigned
+                    } else {
+                        const int32_t delta = signExtend(extracted, s_meta.delta_bits);
+                        const T predicted_T = computePrediction<T>(s_meta.model_type, s_meta.theta0,
+                            s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+                        final_value = applyDelta(predicted_T, static_cast<int64_t>(delta));
+                    }
                 }
             } else {
-                // Model-based: apply delta to prediction
-                const int32_t delta = signExtend(extracted, s_meta.delta_bits);
-                const double predicted = fma(s_meta.theta1, static_cast<double>(local_idx), s_meta.theta0);
-                const T predicted_T = static_cast<T>(round(predicted));
-                final_value = applyDelta(predicted_T, static_cast<int64_t>(delta));
+                // Path for 32-bit types
+                // Note: delta_bits can exceed 32 even for 32-bit types when deltas span a large range
+                if (s_meta.delta_bits > 32) {
+                    // Multi-word extraction for deltas > 32 bits
+                    const int word_idx = local_bit_offset >> 5;
+                    const int bit_in_word = local_bit_offset & 31;
+
+                    uint64_t val64 = 0;
+                    int bits_remaining = s_meta.delta_bits;
+                    int current_word_idx = word_idx;
+                    int current_bit_offset = bit_in_word;
+                    int shift_amount = 0;
+
+                    while (bits_remaining > 0) {
+                        int bits_in_this_word = min(bits_remaining, 32 - current_bit_offset);
+                        uint32_t word = s_delta_buffer[current_word_idx];
+                        uint32_t mask = (bits_in_this_word == 32) ? ~0U : ((1U << bits_in_this_word) - 1U);
+                        uint32_t extracted_word = (word >> current_bit_offset) & mask;
+
+                        val64 |= (static_cast<uint64_t>(extracted_word) << shift_amount);
+
+                        shift_amount += bits_in_this_word;
+                        bits_remaining -= bits_in_this_word;
+                        current_word_idx++;
+                        current_bit_offset = 0;
+                    }
+
+                    if (s_meta.model_type == MODEL_DIRECT_COPY) {
+                        final_value = static_cast<T>(val64);
+                    } else if (s_meta.model_type == MODEL_FOR_BITPACK) {
+                        const T base = computePrediction<T>(s_meta.model_type, s_meta.theta0,
+                            s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+                        final_value = base + static_cast<T>(val64);
+                    } else {
+                        // Sign extend and apply model
+                        int64_t delta64 = signExtend64(val64, s_meta.delta_bits);
+                        const T predicted_T = computePrediction<T>(s_meta.model_type, s_meta.theta0,
+                            s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+                        final_value = applyDelta(predicted_T, delta64);
+                    }
+                } else {
+                    // Standard path for delta_bits <= 32
+                    const uint32_t extracted = extractBitsFromShared(s_delta_buffer, local_bit_offset, s_meta.delta_bits);
+
+                    if (s_meta.model_type == MODEL_DIRECT_COPY) {
+                        // Direct copy: extracted value is the final value
+                        // For signed types, we need sign extension
+                        if constexpr (std::is_signed<T>::value) {
+                            const int32_t signed_val = signExtend(extracted, s_meta.delta_bits);
+                            final_value = static_cast<T>(signed_val);
+                        } else {
+                            final_value = static_cast<T>(extracted);
+                        }
+                    } else if (s_meta.model_type == MODEL_FOR_BITPACK) {
+                        // FOR+BitPack: base + unsigned_delta
+                        const T base = computePrediction<T>(s_meta.model_type, s_meta.theta0,
+                            s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+                        final_value = base + static_cast<T>(extracted);  // Delta is unsigned
+                    } else {
+                        // Model-based: apply delta to prediction using computePrediction
+                        const int32_t delta = signExtend(extracted, s_meta.delta_bits);
+                        const T predicted_T = computePrediction<T>(s_meta.model_type, s_meta.theta0,
+                            s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+                        final_value = applyDelta(predicted_T, static_cast<int64_t>(delta));
+                    }
+                }
             }
 
             // Coalesced write to global memory
             output[global_idx] = final_value;
         }
 
-        __syncthreads();  // Prepare for next chunk
+        __syncthreads();  // Required: ensure all threads finish reading before next chunk overwrites buffer
     }
 }
 
@@ -243,9 +385,13 @@ decompressPartitionsSpecialized(
         s_meta.delta_bits = compressed_data.d_delta_bits[partition_idx];
         s_meta.bit_offset_base = compressed_data.d_delta_array_bit_offsets[partition_idx];
 
+        // Load all 4 model parameters
         const int params_idx = partition_idx * 4;
         s_meta.theta0 = compressed_data.d_model_params[params_idx];
         s_meta.theta1 = compressed_data.d_model_params[params_idx + 1];
+        s_meta.theta2 = compressed_data.d_model_params[params_idx + 2];
+        s_meta.theta3 = compressed_data.d_model_params[params_idx + 3];
+        s_meta.model_type = compressed_data.d_model_types[partition_idx];
     }
 
     __syncthreads();
@@ -256,27 +402,32 @@ decompressPartitionsSpecialized(
 
         if (global_idx >= compressed_data.total_elements) continue;
 
-        int32_t delta = 0;
+        uint32_t extracted = 0;
 
         if (s_meta.delta_bits > 0 && compressed_data.delta_array != nullptr) {
             const int64_t bit_offset = s_meta.bit_offset_base +
                                       (static_cast<int64_t>(local_idx) * s_meta.delta_bits);
-            delta = extractDeltaDirect(compressed_data.delta_array, bit_offset, s_meta.delta_bits);
+            extracted = extractDeltaDirect(compressed_data.delta_array, bit_offset, s_meta.delta_bits);
         }
 
         T final_value;
 
         if constexpr (MODEL_TYPE == MODEL_DIRECT_COPY) {
-            final_value = static_cast<T>(delta);
-        } else if constexpr (MODEL_TYPE == MODEL_LINEAR) {
-            const double predicted = fma(s_meta.theta1, static_cast<double>(local_idx), s_meta.theta0);
-            const T predicted_T = static_cast<T>(round(predicted));
-            final_value = applyDelta(predicted_T, static_cast<int64_t>(delta));
+            final_value = static_cast<T>(extracted);
         } else {
-            // Fallback for other model types
-            const double predicted = fma(s_meta.theta1, static_cast<double>(local_idx), s_meta.theta0);
-            const T predicted_T = static_cast<T>(round(predicted));
-            final_value = applyDelta(predicted_T, static_cast<int64_t>(delta));
+            // Check for FOR_BITPACK at runtime
+            if (s_meta.model_type == MODEL_FOR_BITPACK) {
+                // FOR+BitPack: base + unsigned_delta
+                const T base = computePrediction<T>(s_meta.model_type, s_meta.theta0,
+                    s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+                final_value = base + static_cast<T>(extracted);  // Delta is unsigned
+            } else {
+                // Other models: prediction + signed delta
+                const int32_t delta = signExtend(extracted, s_meta.delta_bits);
+                const T predicted_T = computePrediction<T>(s_meta.model_type, s_meta.theta0,
+                    s_meta.theta1, s_meta.theta2, s_meta.theta3, local_idx);
+                final_value = applyDelta(predicted_T, static_cast<int64_t>(delta));
+            }
         }
 
         output[global_idx] = final_value;
@@ -291,7 +442,7 @@ template<typename T>
 cudaError_t launchDecompressOptimized(
     const CompressedDataOpt<T>& compressed_data,
     T* output,
-    cudaStream_t stream = 0)
+    cudaStream_t stream)
 {
     if (compressed_data.num_partitions == 0) {
         return cudaSuccess;
@@ -319,22 +470,22 @@ template cudaError_t launchDecompressOptimized<uint64_t>(
     const CompressedDataOpt<uint64_t>&, uint64_t*, cudaStream_t);
 
 // ============================================================================
-// Wrapper for CompressedDataGLECO format (L3_codec.hpp compatibility)
+// Wrapper for CompressedDataL3 format (L3_codec.hpp compatibility)
 // ============================================================================
 
 /**
- * Wrapper to decompress using CompressedDataGLECO format
+ * Wrapper to decompress using CompressedDataL3 format
  *
- * This function converts CompressedDataGLECO to CompressedDataOpt and calls
+ * This function converts CompressedDataL3 to CompressedDataOpt and calls
  * the optimized decompression kernel.
  */
 template<typename T>
 void launchDecompressOptimized(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     cudaStream_t stream)
 {
-    // Convert CompressedDataGLECO to CompressedDataOpt
+    // Convert CompressedDataL3 to CompressedDataOpt
     CompressedDataOpt<T> opt_format;
     opt_format.d_start_indices = compressed->d_start_indices;
     opt_format.d_end_indices = compressed->d_end_indices;
@@ -351,15 +502,15 @@ void launchDecompressOptimized(
     launchDecompressOptimized(opt_format, d_output, stream);
 }
 
-// Explicit instantiations for CompressedDataGLECO wrapper
+// Explicit instantiations for CompressedDataL3 wrapper
 template void launchDecompressOptimized<int32_t>(
-    const CompressedDataGLECO<int32_t>*, int32_t*, cudaStream_t);
+    const CompressedDataL3<int32_t>*, int32_t*, cudaStream_t);
 template void launchDecompressOptimized<uint32_t>(
-    const CompressedDataGLECO<uint32_t>*, uint32_t*, cudaStream_t);
+    const CompressedDataL3<uint32_t>*, uint32_t*, cudaStream_t);
 template void launchDecompressOptimized<int64_t>(
-    const CompressedDataGLECO<int64_t>*, int64_t*, cudaStream_t);
+    const CompressedDataL3<int64_t>*, int64_t*, cudaStream_t);
 template void launchDecompressOptimized<uint64_t>(
-    const CompressedDataGLECO<uint64_t>*, uint64_t*, cudaStream_t);
+    const CompressedDataL3<uint64_t>*, uint64_t*, cudaStream_t);
 
 // ============================================================================
 // SIMPLE DECODER (for debugging/comparison with original)
@@ -381,7 +532,7 @@ __global__ void decompressPartitionsSimple(
     __shared__ int32_t s_model_type;
     __shared__ int32_t s_delta_bits;
     __shared__ int64_t s_bit_offset_base;
-    __shared__ double s_theta0, s_theta1;
+    __shared__ double s_theta0, s_theta1, s_theta2, s_theta3;
 
     const int partition_idx = blockIdx.x;
 
@@ -394,8 +545,12 @@ __global__ void decompressPartitionsSimple(
         s_model_type = compressed.d_model_types[partition_idx];
         s_delta_bits = compressed.d_delta_bits[partition_idx];
         s_bit_offset_base = compressed.d_delta_array_bit_offsets[partition_idx];
-        s_theta0 = compressed.d_model_params[partition_idx * 4];
-        s_theta1 = compressed.d_model_params[partition_idx * 4 + 1];
+        // Load all 4 model parameters
+        const int params_idx = partition_idx * 4;
+        s_theta0 = compressed.d_model_params[params_idx];
+        s_theta1 = compressed.d_model_params[params_idx + 1];
+        s_theta2 = compressed.d_model_params[params_idx + 2];
+        s_theta3 = compressed.d_model_params[params_idx + 3];
     }
     __syncthreads();
 
@@ -411,14 +566,14 @@ __global__ void decompressPartitionsSimple(
             if (s_delta_bits > 0) {
                 int64_t bit_offset = s_bit_offset_base + (int64_t)local_idx * s_delta_bits;
 
-                // Handle 64-bit values directly (for uint64_t) - must match encoder.cu:396-406
-                if (s_delta_bits == 64 && sizeof(T) == 8) {
-                    // Extract 64 bits from packed array using same logic as encoder
+                // Handle >32-bit values (for uint64_t) - must match encoder.cu:396-406
+                if (s_delta_bits > 32 && sizeof(T) == 8) {
+                    // Multi-word extraction for >32-bit deltas
                     const int word_idx = bit_offset >> 5;
                     const int bit_in_word = bit_offset & 31;
 
                     uint64_t val64 = 0;
-                    int bits_remaining = 64;
+                    int bits_remaining = s_delta_bits;
                     int current_word_idx = word_idx;
                     int current_bit_offset = bit_in_word;
                     int shift_amount = 0;
@@ -445,18 +600,70 @@ __global__ void decompressPartitionsSimple(
                 final_value = static_cast<T>(0);
             }
         } else {
-            // Model-based prediction
-            double predicted = fma(s_theta1, static_cast<double>(local_idx), s_theta0);
-            T pred_T = static_cast<T>(round(predicted));
+            // Model-based prediction using computePrediction for all model types
+            const T pred_T = computePrediction<T>(s_model_type, s_theta0, s_theta1, s_theta2, s_theta3, local_idx);
 
-            // Extract delta
-            int32_t delta = 0;
+            // Extract delta - handle both 32-bit and 64-bit cases
+            int64_t delta = 0;
             if (s_delta_bits > 0) {
                 int64_t bit_offset = s_bit_offset_base + (int64_t)local_idx * s_delta_bits;
-                delta = extractDeltaDirect(compressed.delta_array, bit_offset, s_delta_bits);
+
+                // Handle >32-bit deltas for 64-bit types (e.g., FOR_BITPACK with large range)
+                if (s_delta_bits > 32 && sizeof(T) == 8) {
+                    // Multi-word extraction (match encoder pattern)
+                    const int word_idx = bit_offset >> 5;
+                    const int bit_in_word = bit_offset & 31;
+
+                    uint64_t result = 0;
+                    int bits_remaining = s_delta_bits;
+                    int current_word_idx = word_idx;
+                    int current_bit_offset = bit_in_word;
+                    int shift_amount = 0;
+
+                    while (bits_remaining > 0) {
+                        int bits_in_this_word = min(bits_remaining, 32 - current_bit_offset);
+                        uint32_t word = compressed.delta_array[current_word_idx];
+                        uint32_t mask = (bits_in_this_word == 32) ? ~0U : ((1U << bits_in_this_word) - 1U);
+                        uint32_t extracted_part = (word >> current_bit_offset) & mask;
+
+                        result |= (static_cast<uint64_t>(extracted_part) << shift_amount);
+
+                        shift_amount += bits_in_this_word;
+                        bits_remaining -= bits_in_this_word;
+                        current_word_idx++;
+                        current_bit_offset = 0;
+                    }
+
+                    // FOR_BITPACK uses unsigned deltas, others use signed
+                    if (s_model_type == MODEL_FOR_BITPACK) {
+                        delta = static_cast<int64_t>(result);  // Unsigned delta
+                    } else {
+                        delta = signExtend64(result, s_delta_bits);  // Signed delta
+                    }
+                } else {
+                    // Standard 32-bit extraction
+                    // NOTE: extractDeltaDirect returns int32_t (already sign-extended)
+                    // For FOR_BITPACK, we need the original unsigned bits
+                    int32_t raw_signed = extractDeltaDirect(compressed.delta_array, bit_offset, s_delta_bits);
+                    if (s_model_type == MODEL_FOR_BITPACK) {
+                        // FOR_BITPACK uses unsigned deltas - mask off sign extension bits
+                        uint32_t unsigned_delta = static_cast<uint32_t>(raw_signed) & ((1U << s_delta_bits) - 1);
+                        delta = static_cast<int64_t>(unsigned_delta);
+                    } else {
+                        // Other models: already sign-extended by extractDeltaDirect
+                        delta = static_cast<int64_t>(raw_signed);
+                    }
+                }
             }
 
-            final_value = applyDelta(pred_T, static_cast<int64_t>(delta));
+            // Apply delta to prediction
+            if (s_model_type == MODEL_FOR_BITPACK) {
+                // FOR+BitPack: base + unsigned_delta
+                final_value = static_cast<T>(static_cast<int64_t>(pred_T) + delta);
+            } else {
+                // Other models: prediction + signed_delta
+                final_value = applyDelta(pred_T, delta);
+            }
         }
 
         output[global_idx] = final_value;
@@ -465,11 +672,11 @@ __global__ void decompressPartitionsSimple(
 
 template<typename T>
 void launchDecompressSimple(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     cudaStream_t stream)
 {
-    // Convert CompressedDataGLECO to CompressedDataOpt for device access
+    // Convert CompressedDataL3 to CompressedDataOpt for device access
     CompressedDataOpt<T> opt_format;
     opt_format.d_start_indices = compressed->d_start_indices;
     opt_format.d_end_indices = compressed->d_end_indices;
@@ -490,7 +697,7 @@ void launchDecompressSimple(
 }
 
 // Explicit instantiations for simple decoder
-template void launchDecompressSimple<int32_t>(const CompressedDataGLECO<int32_t>*, int32_t*, cudaStream_t);
-template void launchDecompressSimple<uint32_t>(const CompressedDataGLECO<uint32_t>*, uint32_t*, cudaStream_t);
-template void launchDecompressSimple<int64_t>(const CompressedDataGLECO<int64_t>*, int64_t*, cudaStream_t);
-template void launchDecompressSimple<uint64_t>(const CompressedDataGLECO<uint64_t>*, uint64_t*, cudaStream_t);
+template void launchDecompressSimple<int32_t>(const CompressedDataL3<int32_t>*, int32_t*, cudaStream_t);
+template void launchDecompressSimple<uint32_t>(const CompressedDataL3<uint32_t>*, uint32_t*, cudaStream_t);
+template void launchDecompressSimple<int64_t>(const CompressedDataL3<int64_t>*, int64_t*, cudaStream_t);
+template void launchDecompressSimple<uint64_t>(const CompressedDataL3<uint64_t>*, uint64_t*, cudaStream_t);

@@ -42,7 +42,7 @@ void testMinMax(const std::vector<uint64_t>& data, const char* test_name) {
 
     // 压缩数据
     CompressionStats stats;
-    CompressedDataGLECO<uint64_t>* compressed = nullptr;
+    CompressedDataL3<uint64_t>* compressed = nullptr;
 
     if (std::string(test_name).find("Fixed") != std::string::npos) {
         compressed = compressData(data, 2048, &stats);

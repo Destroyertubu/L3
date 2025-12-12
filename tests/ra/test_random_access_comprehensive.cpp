@@ -1,5 +1,5 @@
 /**
- * GLECO Random Access Comprehensive Test
+ * L3 Random Access Comprehensive Test
  *
  * Tests random access functionality on large real-world datasets:
  * - Facebook 200M uint64 dataset
@@ -20,7 +20,7 @@
  * - Correctness validation
  *
  * Date: 2025-10-23
- * Author: Claude Code - GLECO Random Access Testing
+ * Author: Claude Code - L3 Random Access Testing
  */
 
 #include "L3_codec.hpp"
@@ -193,7 +193,7 @@ void printStats(const std::string& test_name, const RandomAccessStats& stats, in
 template<typename T>
 void testAccessPattern(
     const std::string& pattern_name,
-    CompressedDataGLECO<T>* compressed,
+    CompressedDataL3<T>* compressed,
     const std::vector<T>& original_data,
     int num_accesses,
     bool verify = true)
@@ -273,7 +273,7 @@ void testDataset(const std::string& dataset_name, const std::string& filename, s
     // Compress data
     std::cout << "\nCompressing data..." << std::endl;
     CompressionStats comp_stats;
-    CompressedDataGLECO<T>* compressed = compressData(data.data(), num_elements, 2048, &comp_stats);
+    CompressedDataL3<T>* compressed = compressData(data.data(), num_elements, 2048, &comp_stats);
 
     std::cout << "  Compressed size: " << (comp_stats.compressed_bytes / (1024.0 * 1024.0)) << " MB" << std::endl;
     std::cout << "  Compression ratio: " << comp_stats.compression_ratio << "x" << std::endl;
@@ -284,9 +284,9 @@ void testDataset(const std::string& dataset_name, const std::string& filename, s
     CUDA_CHECK(cudaDeviceSynchronize());
 
     // Allocate device copy of compressed structure for device-side access
-    CompressedDataGLECO<T>* d_compressed;
-    CUDA_CHECK(cudaMalloc(&d_compressed, sizeof(CompressedDataGLECO<T>)));
-    CUDA_CHECK(cudaMemcpy(d_compressed, compressed, sizeof(CompressedDataGLECO<T>), cudaMemcpyHostToDevice));
+    CompressedDataL3<T>* d_compressed;
+    CUDA_CHECK(cudaMalloc(&d_compressed, sizeof(CompressedDataL3<T>)));
+    CUDA_CHECK(cudaMemcpy(d_compressed, compressed, sizeof(CompressedDataL3<T>), cudaMemcpyHostToDevice));
     compressed->d_self = d_compressed;
 
     CUDA_CHECK(cudaDeviceSynchronize());
@@ -332,7 +332,7 @@ void testDataset(const std::string& dataset_name, const std::string& filename, s
 // ============================================================================
 
 int main(int argc, char** argv) {
-    std::cout << "GLECO Random Access Comprehensive Test" << std::endl;
+    std::cout << "L3 Random Access Comprehensive Test" << std::endl;
     std::cout << "=======================================" << std::endl;
 
     // Test configuration

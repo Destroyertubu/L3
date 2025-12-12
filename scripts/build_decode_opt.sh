@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build script for GLECO decompression optimization benchmarks
+# Build script for L3 decompression optimization benchmarks
 
 set -e
 
@@ -10,7 +10,7 @@ INC_DIR="$PROJECT_ROOT/include"
 BIN_DIR="$PROJECT_ROOT/bin"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║  Building GLECO Decode Optimization Benchmarks              ║"
+echo "║  Building L3 Decode Optimization Benchmarks              ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 echo "Project root: $PROJECT_ROOT"

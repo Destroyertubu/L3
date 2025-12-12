@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Run benchmark script for GLECO optimized decompression
+# Run benchmark script for L3 optimized decompression
 
 set -e
 
@@ -10,7 +10,7 @@ BENCH_EXEC="${BUILD_DIR}/bin/L3_bench"
 RESULTS_DIR="${PROJECT_ROOT}/results"
 
 echo "==================================="
-echo "GLECO Optimized Decompression Benchmark"
+echo "L3 Optimized Decompression Benchmark"
 echo "==================================="
 
 # Check if built

@@ -1,5 +1,5 @@
 /**
- * GLECO Optimized Decompression Kernels
+ * L3 Optimized Decompression Kernels
  *
  * Optimization Strategy:
  * 1. Template specialization for common bit widths (8, 16)
@@ -288,11 +288,189 @@ decompressPartitions_16bit_Opt(
 }
 
 // ============================================================================
+// GENERIC KERNEL: Per-partition delta_bits (fallback for non-8/16-bit)
+// ============================================================================
+// This kernel reads the actual delta_bits from each partition's metadata
+// and handles arbitrary bit widths.
+// ============================================================================
+
+template<typename T>
+__global__ void __launch_bounds__(256, 4)
+decompressPartitions_Generic_Opt(
+    const int32_t* __restrict__ d_start_indices,
+    const int32_t* __restrict__ d_end_indices,
+    const int32_t* __restrict__ d_model_types,
+    const double* __restrict__ d_model_params,
+    const int32_t* __restrict__ d_delta_bits,
+    const int64_t* __restrict__ d_delta_array_bit_offsets,
+    const uint32_t* __restrict__ delta_array,
+    const int num_partitions,
+    const int total_elements,
+    T* __restrict__ output)
+{
+    __shared__ struct {
+        int32_t start_idx;
+        int32_t partition_len;
+        int32_t model_type;
+        int32_t delta_bits;
+        double theta0;
+        double theta1;
+        int64_t bit_offset_base;
+    } meta;
+
+    const int partition_idx = blockIdx.x;
+    if (partition_idx >= num_partitions) return;
+
+    // Thread 0 loads metadata
+    if (threadIdx.x == 0) {
+        meta.start_idx = d_start_indices[partition_idx];
+        meta.partition_len = d_end_indices[partition_idx] - meta.start_idx;
+        meta.model_type = d_model_types[partition_idx];
+        meta.delta_bits = d_delta_bits[partition_idx];  // Per-partition bits!
+        meta.bit_offset_base = d_delta_array_bit_offsets[partition_idx];
+
+        const int params_idx = partition_idx * 4;
+        meta.theta0 = d_model_params[params_idx];
+        meta.theta1 = d_model_params[params_idx + 1];
+    }
+
+    __syncthreads();
+
+    // Handle zero delta_bits case (perfect prediction)
+    if (meta.delta_bits == 0) {
+        for (int local_idx = threadIdx.x; local_idx < meta.partition_len; local_idx += blockDim.x) {
+            const int global_idx = meta.start_idx + local_idx;
+            if (global_idx >= total_elements) continue;
+
+            T final_value;
+            if (meta.model_type == MODEL_DIRECT_COPY) {
+                final_value = static_cast<T>(0);
+            } else {
+                const double predicted = fma(meta.theta1, static_cast<double>(local_idx), meta.theta0);
+                final_value = static_cast<T>(round(predicted));
+            }
+            output[global_idx] = final_value;
+        }
+        return;
+    }
+
+    // Grid-stride loop for variable bit widths
+    for (int local_idx = threadIdx.x; local_idx < meta.partition_len; local_idx += blockDim.x) {
+        const int global_idx = meta.start_idx + local_idx;
+        if (global_idx >= total_elements) continue;
+
+        // Calculate bit offset for this element
+        const int64_t bit_offset = meta.bit_offset_base +
+                                   (static_cast<int64_t>(local_idx) * meta.delta_bits);
+        const int word_idx = bit_offset >> 5;
+        const int bit_in_word = bit_offset & 31;
+
+        T final_value;
+
+        // Handle 64-bit types with deltas > 32 bits
+        if constexpr (sizeof(T) == 8) {
+            if (meta.delta_bits > 32) {
+                // Multi-word extraction for 64-bit deltas
+                uint64_t val64 = 0;
+                int bits_remaining = meta.delta_bits;
+                int current_word_idx = word_idx;
+                int current_bit_offset = bit_in_word;
+                int shift_amount = 0;
+
+                while (bits_remaining > 0) {
+                    int bits_in_this_word = min(bits_remaining, 32 - current_bit_offset);
+                    uint32_t word = __ldg(&delta_array[current_word_idx]);
+                    uint32_t mask = (bits_in_this_word == 32) ? ~0U : ((1U << bits_in_this_word) - 1U);
+                    uint32_t extracted_word = (word >> current_bit_offset) & mask;
+
+                    val64 |= (static_cast<uint64_t>(extracted_word) << shift_amount);
+
+                    shift_amount += bits_in_this_word;
+                    bits_remaining -= bits_in_this_word;
+                    current_word_idx++;
+                    current_bit_offset = 0;
+                }
+
+                if (meta.model_type == MODEL_DIRECT_COPY) {
+                    final_value = static_cast<T>(val64);
+                } else {
+                    // Sign extend the extracted delta
+                    int64_t delta64 = signExtend64(val64, meta.delta_bits);
+                    const double predicted = fma(meta.theta1, static_cast<double>(local_idx), meta.theta0);
+                    const T predicted_T = static_cast<T>(round(predicted));
+
+                    if constexpr (std::is_signed<T>::value) {
+                        final_value = static_cast<T>(static_cast<int64_t>(predicted_T) + delta64);
+                    } else {
+                        final_value = static_cast<T>(static_cast<int64_t>(predicted_T) + delta64);
+                    }
+                }
+
+                output[global_idx] = final_value;
+                continue;
+            }
+        }
+
+        // Standard path for <= 32-bit deltas
+        // Extract delta (handles cross-word boundaries)
+        uint32_t extracted;
+        if (bit_in_word + meta.delta_bits <= 32) {
+            // Fits in single word
+            const uint32_t w0 = __ldg(&delta_array[word_idx]);
+            const uint32_t mask = (meta.delta_bits == 32) ? 0xFFFFFFFFU : ((1U << meta.delta_bits) - 1U);
+            extracted = (w0 >> bit_in_word) & mask;
+        } else {
+            // Crosses word boundary
+            const uint32_t w0 = __ldg(&delta_array[word_idx]);
+            const uint32_t w1 = __ldg(&delta_array[word_idx + 1]);
+            const uint64_t combined = (static_cast<uint64_t>(w1) << 32) | w0;
+            const uint32_t mask = (meta.delta_bits == 32) ? 0xFFFFFFFFU : ((1U << meta.delta_bits) - 1U);
+            extracted = static_cast<uint32_t>((combined >> bit_in_word) & mask);
+        }
+
+        // Sign extend
+        int32_t delta;
+        if (meta.delta_bits < 32) {
+            const uint32_t sign_bit = extracted >> (meta.delta_bits - 1);
+            const uint32_t sign_mask = -sign_bit;
+            const uint32_t extend_mask = ~((1U << meta.delta_bits) - 1U);
+            delta = static_cast<int32_t>(extracted | (sign_mask & extend_mask));
+        } else {
+            delta = static_cast<int32_t>(extracted);
+        }
+
+        if (meta.model_type == MODEL_DIRECT_COPY) {
+            // Direct copy: use raw extracted value for unsigned, sign-extended for signed
+            if constexpr (std::is_signed<T>::value) {
+                final_value = static_cast<T>(delta);
+            } else {
+                final_value = static_cast<T>(extracted);
+            }
+        } else {
+            const double predicted = fma(meta.theta1,
+                                        static_cast<double>(local_idx),
+                                        meta.theta0);
+            const T predicted_T = static_cast<T>(round(predicted));
+
+            if constexpr (std::is_signed<T>::value) {
+                final_value = predicted_T + static_cast<T>(delta);
+            } else {
+                final_value = static_cast<T>(
+                    static_cast<int64_t>(predicted_T) + delta
+                );
+            }
+        }
+
+        output[global_idx] = final_value;
+    }
+}
+
+// ============================================================================
 // Dispatcher function
 // ============================================================================
 
 template<typename T>
-void decompressGLECO_Optimized(
+void decompressL3_Optimized(
     const int32_t* d_start_indices,
     const int32_t* d_end_indices,
     const int32_t* d_model_types,
@@ -308,38 +486,29 @@ void decompressGLECO_Optimized(
     dim3 block(256);
     dim3 grid(num_partitions);
 
-    // Dispatch to specialized kernel based on bit width
-    if (avg_delta_bits == 8) {
-        decompressPartitions_8bit_Opt<<<grid, block>>>(
-            d_start_indices, d_end_indices, d_model_types, d_model_params,
-            d_delta_bits, d_delta_array_bit_offsets, delta_array,
-            num_partitions, total_elements, output
-        );
-    } else if (avg_delta_bits == 16) {
-        decompressPartitions_16bit_Opt<<<grid, block>>>(
-            d_start_indices, d_end_indices, d_model_types, d_model_params,
-            d_delta_bits, d_delta_array_bit_offsets, delta_array,
-            num_partitions, total_elements, output
-        );
-    } else {
-        // Fall back to baseline kernel for other bit widths
-        // decompressPartitionsOptimized<<<grid, block>>>(...);  // Use existing
-    }
+    // Always use generic kernel that reads per-partition delta_bits
+    // This handles mixed bit-width data correctly
+    // Specialized 8-bit and 16-bit kernels only work when ALL partitions have the same bit width
+    decompressPartitions_Generic_Opt<<<grid, block>>>(
+        d_start_indices, d_end_indices, d_model_types, d_model_params,
+        d_delta_bits, d_delta_array_bit_offsets, delta_array,
+        num_partitions, total_elements, output
+    );
 }
 
 // Explicit instantiations
-template void decompressGLECO_Optimized<uint32_t>(
+template void decompressL3_Optimized<uint32_t>(
     const int32_t*, const int32_t*, const int32_t*, const double*,
     const int32_t*, const int64_t*, const uint32_t*, int, int, uint32_t*, int);
 
-template void decompressGLECO_Optimized<uint64_t>(
+template void decompressL3_Optimized<uint64_t>(
     const int32_t*, const int32_t*, const int32_t*, const double*,
     const int32_t*, const int64_t*, const uint32_t*, int, int, uint64_t*, int);
 
-template void decompressGLECO_Optimized<int32_t>(
+template void decompressL3_Optimized<int32_t>(
     const int32_t*, const int32_t*, const int32_t*, const double*,
     const int32_t*, const int64_t*, const uint32_t*, int, int, int32_t*, int);
 
-template void decompressGLECO_Optimized<int64_t>(
+template void decompressL3_Optimized<int64_t>(
     const int32_t*, const int32_t*, const int32_t*, const double*,
     const int32_t*, const int64_t*, const uint32_t*, int, int, int64_t*, int);

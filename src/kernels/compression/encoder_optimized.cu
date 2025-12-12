@@ -1,5 +1,5 @@
 /**
- * GLECO Optimized Encoder Kernels
+ * L3 Optimized Encoder Kernels
  *
  * GPU optimization techniques applied:
  * 1. Warp-level primitives for reduction
@@ -258,7 +258,8 @@ __global__ void processPartitionsOptimized(
 
         for (int i = tid; i < segment_len; i += blockDim.x) {
             double predicted = theta0 + theta1 * i;
-            T pred_T = static_cast<T>(round(predicted));
+            // Use __double2ll_rn for consistency with decoder (banker's rounding)
+            T pred_T = static_cast<T>(__double2ll_rn(predicted));
             long long delta = calculateDelta(values_device[start_idx + i], pred_T);
             long long abs_error = (delta < 0) ? -delta : delta;
             max_error = (abs_error > max_error) ? abs_error : max_error;
@@ -441,8 +442,68 @@ __global__ void packDeltasOptimized(
                     offset_in_word = 0;
                 }
             }
+        } else if (current_model_type == MODEL_FOR_BITPACK) {
+            // FOR model: delta = value - base (UNSIGNED)
+            // base is stored in theta0; for 64-bit types, it's stored as bit pattern
+            int current_local_idx = current_idx - current_start_idx;
+
+            T base;
+            if constexpr (sizeof(T) == 8) {
+                // 64-bit: base stored as bit pattern via __longlong_as_double
+                base = static_cast<T>(__double_as_longlong(d_model_params[found_partition_idx * 4]));
+            } else {
+                // 32-bit: direct cast is fine
+                base = static_cast<T>(d_model_params[found_partition_idx * 4]);
+            }
+
+            // FOR delta is UNSIGNED (value - base where base = min)
+            uint64_t unsigned_delta = static_cast<uint64_t>(values_device[current_idx]) - static_cast<uint64_t>(base);
+
+            if (current_delta_bits > 0) {
+                int64_t current_bit_offset_val = current_bit_offset_base +
+                                                 (int64_t)current_local_idx * current_delta_bits;
+
+                // Pack the unsigned delta (no sign bit needed)
+                if (current_delta_bits <= 32) {
+                    uint32_t final_packed_delta = static_cast<uint32_t>(unsigned_delta &
+                                                                       ((1ULL << current_delta_bits) - 1ULL));
+
+                    int target_word_idx = current_bit_offset_val / 32;
+                    int offset_in_word = current_bit_offset_val % 32;
+
+                    if (current_delta_bits + offset_in_word <= 32) {
+                        atomicOr(&delta_array_device[target_word_idx], final_packed_delta << offset_in_word);
+                    } else {
+                        atomicOr(&delta_array_device[target_word_idx], final_packed_delta << offset_in_word);
+                        atomicOr(&delta_array_device[target_word_idx + 1],
+                                final_packed_delta >> (32 - offset_in_word));
+                    }
+                } else {
+                    // For deltas > 32 bits
+                    uint64_t final_packed_delta_64 = unsigned_delta &
+                        ((current_delta_bits == 64) ? ~0ULL : ((1ULL << current_delta_bits) - 1ULL));
+
+                    int start_word_idx = current_bit_offset_val / 32;
+                    int offset_in_word = current_bit_offset_val % 32;
+                    int bits_remaining = current_delta_bits;
+                    int word_idx = start_word_idx;
+                    uint64_t delta_to_write = final_packed_delta_64;
+
+                    while (bits_remaining > 0) {
+                        int bits_in_this_word = min(bits_remaining, 32 - offset_in_word);
+                        uint32_t mask = (bits_in_this_word == 32) ? ~0U : ((1U << bits_in_this_word) - 1U);
+                        uint32_t value = (delta_to_write & mask) << offset_in_word;
+                        atomicOr(&delta_array_device[word_idx], value);
+
+                        delta_to_write >>= bits_in_this_word;
+                        bits_remaining -= bits_in_this_word;
+                        word_idx++;
+                        offset_in_word = 0;
+                    }
+                }
+            }
         } else {
-            // Normal delta encoding path
+            // Normal delta encoding path (LINEAR, POLY2, POLY3)
             int current_local_idx = current_idx - current_start_idx;
 
             // Use FMA for better accuracy and performance
@@ -454,9 +515,15 @@ __global__ void packDeltasOptimized(
                 pred_double = fma(d_model_params[found_partition_idx * 4 + 2],
                                  static_cast<double>(current_local_idx * current_local_idx),
                                  pred_double);
+            } else if (current_model_type == MODEL_POLYNOMIAL3) {
+                double x2 = static_cast<double>(current_local_idx * current_local_idx);
+                double x3 = x2 * current_local_idx;
+                pred_double = fma(d_model_params[found_partition_idx * 4 + 2], x2, pred_double);
+                pred_double = fma(d_model_params[found_partition_idx * 4 + 3], x3, pred_double);
             }
 
-            T pred_T_val = static_cast<T>(round(pred_double));
+            // Use __double2ll_rn for consistency with decoder (banker's rounding)
+            T pred_T_val = static_cast<T>(__double2ll_rn(pred_double));
             long long current_delta_ll = calculateDelta(values_device[current_idx], pred_T_val);
 
             if (current_delta_bits > 0) {

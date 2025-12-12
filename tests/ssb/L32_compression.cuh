@@ -2755,7 +2755,7 @@ void run_compression_test(const std::vector<T>& data_to_test,
 }
 
 // Main Function (only compiled when not in library mode)
-#ifndef GLECO2_LIB_MODE
+#ifndef L32_LIB_MODE
 int main(int argc, char* argv[]) {
     srand(static_cast<unsigned int>(time(NULL)));
 
@@ -2937,4 +2937,4 @@ int main(int argc, char* argv[]) {
     }
     return 0;
 }
-#endif // GLECO2_LIB_MODE
+#endif // L32_LIB_MODE

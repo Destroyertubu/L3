@@ -1,5 +1,5 @@
 /**
- * Variable-Length Encoder Header for GLECO
+ * Variable-Length Encoder Header for L3
  */
 
 #ifndef ENCODER_VARIABLE_LENGTH_CUH

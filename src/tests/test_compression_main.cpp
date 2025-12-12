@@ -1,5 +1,5 @@
 /**
- * GLECO Compression Test Program
+ * L3 Compression Test Program
  *
  * Purpose: Test compression and decompression using decompression_kernels_phase2_bucket.cu
  * Dataset: /root/autodl-tmp/test/data/fb_200M_uint64.bin
@@ -18,7 +18,7 @@
 
 // External function declaration for Phase 2 Bucket decompression
 template<typename T>
-void decompressGLECO_Phase2_Bucket(
+void decompressL3_Phase2_Bucket(
     const int32_t* d_start_indices,
     const int32_t* d_end_indices,
     const int32_t* d_model_types,
@@ -94,10 +94,10 @@ bool verifyDecompression(const std::vector<uint64_t>& original,
 }
 
 void printCompressionStats(const std::vector<uint64_t>& data,
-                          const GLECOCompressedData<uint64_t>& compressed) {
+                          const CompressionStats& stats) {
     size_t original_bytes = data.size() * sizeof(uint64_t);
-    size_t compressed_bytes = compressed.calculateCompressedSize();
-    double ratio = static_cast<double>(original_bytes) / compressed_bytes;
+    size_t compressed_bytes = stats.compressed_bytes;
+    double ratio = stats.compression_ratio;
 
     std::cout << "\n" << std::string(70, '=') << std::endl;
     std::cout << "Compression Statistics" << std::endl;
@@ -110,7 +110,7 @@ void printCompressionStats(const std::vector<uint64_t>& data,
               << std::setprecision(2) << ratio << "x" << std::endl;
     std::cout << "Space savings:     " << std::setw(12) << std::fixed
               << std::setprecision(2) << (1.0 - 1.0/ratio) * 100 << "%" << std::endl;
-    std::cout << "Partitions:        " << std::setw(12) << compressed.num_partitions << std::endl;
+    std::cout << "Partitions:        " << std::setw(12) << stats.num_partitions << std::endl;
     std::cout << std::string(70, '=') << std::endl;
 }
 
@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
     size_t max_elements = (argc > 2) ? std::stoull(argv[2]) : 0;
 
     std::cout << "\n" << std::string(70, '=') << std::endl;
-    std::cout << "GLECO Compression Test (Phase 2 Bucket Decompression)" << std::endl;
+    std::cout << "L3 Compression Test (Phase 2 Bucket Decompression)" << std::endl;
     std::cout << std::string(70, '=') << std::endl;
     std::cout << "Input file: " << input_file << std::endl;
     if (max_elements > 0) {
@@ -145,13 +145,14 @@ int main(int argc, char** argv) {
     // Step 2: Compress data
     std::cout << "\n[2/4] Compressing data..." << std::endl;
     start = std::chrono::high_resolution_clock::now();
-    GLECOCompressedData<uint64_t> compressed = compressGLECO(data);
+    CompressionStats stats;
+    CompressedDataL3<uint64_t>* compressed = compressData(data, 2048, &stats);
     end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> compress_time = end - start;
 
     std::cout << "  Compressed in " << std::fixed << std::setprecision(3)
               << compress_time.count() << " seconds" << std::endl;
-    printCompressionStats(data, compressed);
+    printCompressionStats(data, stats);
 
     // Step 3: Decompress data using Phase 2 Bucket kernel
     std::cout << "\n[3/4] Decompressing data (Phase 2 Bucket)..." << std::endl;
@@ -160,16 +161,33 @@ int main(int argc, char** argv) {
     uint64_t* d_output;
     CUDA_CHECK(cudaMalloc(&d_output, data.size() * sizeof(uint64_t)));
 
+    // Convert delta_bits from int32_t to uint8_t for decompression kernel
+    std::vector<int32_t> h_delta_bits_i32(compressed->num_partitions);
+    CUDA_CHECK(cudaMemcpy(h_delta_bits_i32.data(), compressed->d_delta_bits,
+                         compressed->num_partitions * sizeof(int32_t),
+                         cudaMemcpyDeviceToHost));
+
+    std::vector<uint8_t> h_delta_bits(compressed->num_partitions);
+    for (int i = 0; i < compressed->num_partitions; ++i) {
+        h_delta_bits[i] = static_cast<uint8_t>(h_delta_bits_i32[i]);
+    }
+
+    uint8_t* d_delta_bits_u8;
+    CUDA_CHECK(cudaMalloc(&d_delta_bits_u8, compressed->num_partitions * sizeof(uint8_t)));
+    CUDA_CHECK(cudaMemcpy(d_delta_bits_u8, h_delta_bits.data(),
+                         compressed->num_partitions * sizeof(uint8_t),
+                         cudaMemcpyHostToDevice));
+
     start = std::chrono::high_resolution_clock::now();
-    decompressGLECO_Phase2_Bucket<uint64_t>(
-        compressed.d_start_indices,
-        compressed.d_end_indices,
-        compressed.d_model_types,
-        compressed.d_model_params,
-        compressed.d_delta_bits,
-        compressed.d_delta_array_bit_offsets,
-        compressed.d_delta_array,
-        compressed.num_partitions,
+    decompressL3_Phase2_Bucket<uint64_t>(
+        compressed->d_start_indices,
+        compressed->d_end_indices,
+        compressed->d_model_types,
+        compressed->d_model_params,
+        d_delta_bits_u8,
+        compressed->d_delta_array_bit_offsets,
+        compressed->delta_array,
+        compressed->num_partitions,
         data.size(),
         d_output
     );
@@ -180,6 +198,8 @@ int main(int argc, char** argv) {
     CUDA_CHECK(cudaMemcpy(decompressed.data(), d_output,
                          data.size() * sizeof(uint64_t), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaFree(d_output));
+    CUDA_CHECK(cudaFree(d_delta_bits_u8));
+    freeCompressedData(compressed);
 
     std::cout << "  Decompressed in " << std::fixed << std::setprecision(3)
               << decompress_time.count() << " seconds" << std::endl;

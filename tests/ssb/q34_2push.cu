@@ -1,4 +1,4 @@
-// SSB Query 3.4 with GLECO2 Compression - Random Access Optimized (_2push version)
+// SSB Query 3.4 with L32 Compression - Random Access Optimized (_2push version)
 // Query: SELECT c_city, s_city, d_year, SUM(lo_revenue) AS revenue
 //        FROM customer, lineorder, supplier, date
 //        WHERE lo_custkey = c_custkey
@@ -57,7 +57,7 @@ struct Candidate {
 // Stage 1: Scan orderdate with d_yearmonth filter
 template<typename T>
 __global__ void ssb_q34_stage1_scan(
-    const CompressedDataGLECO<T>* c_orderdate,
+    const CompressedDataL3<T>* c_orderdate,
     const DateEntry* d_date_ht,
     int num_entries,
     Candidate* d_candidates,
@@ -139,9 +139,9 @@ __global__ void ssb_q34_stage1_scan(
 // Stage 2: Random access custkey, suppkey, revenue for candidates
 template<typename T>
 __global__ void ssb_q34_stage2_random_access(
-    const CompressedDataGLECO<T>* c_custkey,
-    const CompressedDataGLECO<T>* c_suppkey,
-    const CompressedDataGLECO<T>* c_revenue,
+    const CompressedDataL3<T>* c_custkey,
+    const CompressedDataL3<T>* c_suppkey,
+    const CompressedDataL3<T>* c_revenue,
     const CustomerEntry* d_customer_ht,
     const SupplierEntry* d_supplier_ht,
     const Candidate* d_candidates,
@@ -203,7 +203,7 @@ __global__ void ssb_q34_stage2_random_access(
 
 int main(int argc, char** argv) {
     cout << "========================================================================" << endl;
-    cout << "  SSB Query 3.4 with GLECO2 Compression - Random Access Optimized" << endl;
+    cout << "  SSB Query 3.4 with L32 Compression - Random Access Optimized" << endl;
     cout << "========================================================================" << endl;
     cout << endl;
 
@@ -271,15 +271,15 @@ int main(int argc, char** argv) {
     cout << "✓ Hash tables built" << endl;
     cout << endl;
 
-    cout << "Compressing LINEORDER columns with GLECO2..." << endl;
+    cout << "Compressing LINEORDER columns with L32..." << endl;
     
     
     auto compress_start = chrono::high_resolution_clock::now();
 
-    CompressedDataGLECO<uint32_t>* c_orderdate = compressData(lo_orderdate, 1024);
-    CompressedDataGLECO<uint32_t>* c_custkey_c = compressData(lo_custkey, 1024);
-    CompressedDataGLECO<uint32_t>* c_suppkey_c = compressData(lo_suppkey, 1024);
-    CompressedDataGLECO<uint32_t>* c_revenue = compressData(lo_revenue, 1024);
+    CompressedDataL3<uint32_t>* c_orderdate = compressData(lo_orderdate, 1024);
+    CompressedDataL3<uint32_t>* c_custkey_c = compressData(lo_custkey, 1024);
+    CompressedDataL3<uint32_t>* c_suppkey_c = compressData(lo_suppkey, 1024);
+    CompressedDataL3<uint32_t>* c_revenue = compressData(lo_revenue, 1024);
 
     auto compress_end = chrono::high_resolution_clock::now();
     double compress_time = chrono::duration<double>(compress_end - compress_start).count();

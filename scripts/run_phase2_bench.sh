@@ -9,7 +9,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_ROOT"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║  GLECO Phase 2 Performance Benchmark                        ║"
+echo "║  L3 Phase 2 Performance Benchmark                        ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 

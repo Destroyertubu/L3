@@ -1,5 +1,5 @@
 /**
- * GLECO Decompression Kernel Baseline Benchmark
+ * L3 Decompression Kernel Baseline Benchmark
  *
  * Purpose: Measure pure kernel decompression performance across different bit widths
  * Metrics: Median kernel time (ms), throughput (GB/s)
@@ -23,7 +23,7 @@
 // Forward declaration of kernel launcher
 template<typename T>
 void launchDecompressWarpOpt(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     cudaStream_t stream
 );
@@ -157,7 +157,7 @@ BenchmarkResult benchmarkDecompression(
 
 int main(int argc, char** argv) {
     std::cout << "╔══════════════════════════════════════════════════════════════╗\n";
-    std::cout << "║  GLECO Decompression Kernel - Baseline Benchmark            ║\n";
+    std::cout << "║  L3 Decompression Kernel - Baseline Benchmark            ║\n";
     std::cout << "╚══════════════════════════════════════════════════════════════╝\n\n";
 
     // Test configuration

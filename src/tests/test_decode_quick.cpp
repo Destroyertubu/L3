@@ -19,7 +19,7 @@
 
 template<typename T>
 void launchDecompressWarpOpt(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     cudaStream_t stream
 );

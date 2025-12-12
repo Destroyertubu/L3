@@ -1,5 +1,5 @@
 /**
- * GLECO Phase 2.3: Ultimate Optimized Bucket-Based Decompression
+ * L3 Phase 2.3: Ultimate Optimized Bucket-Based Decompression
  *
  * EXTREME OPTIMIZATIONS APPLIED:
  * ================================
@@ -30,7 +30,7 @@
  *
  * Platform: H20 (SM 9.0), CUDA 12.4.131
  * Date: 2025-10-22
- * Author: Claude Code - GLECO Optimization
+ * Author: Claude Code - L3 Optimization
  */
 
 #ifndef PHASE2_USE_CP_ASYNC
@@ -393,7 +393,7 @@ decode_bucket_kernel_optimized(
                     const double predicted = fma(meta.theta1,
                                                 static_cast<double>(local_idx),
                                                 meta.theta0);
-                    final_value = static_cast<T>(round(predicted));
+                    final_value = static_cast<T>(__double2ll_rn(predicted));
                 }
 
                 out_vals[global_idx] = final_value;
@@ -459,7 +459,7 @@ decode_bucket_kernel_optimized(
                         const double predicted = fma(meta.theta1,
                                                     static_cast<double>(elem_local),
                                                     meta.theta0);
-                        const T predicted_T = static_cast<T>(round(predicted));
+                        const T predicted_T = static_cast<T>(__double2ll_rn(predicted));
 
                         if constexpr (std::is_signed<T>::value) {
                             final_value = predicted_T + static_cast<T>(delta);
@@ -589,7 +589,7 @@ decode_generic_kernel_upto64_optimized(
                         const double predicted = fma(smem.meta.theta1, \
                                                     static_cast<double>(local_idx), \
                                                     smem.meta.theta0); \
-                        const T predicted_T = static_cast<T>(round(predicted)); \
+                        const T predicted_T = static_cast<T>(__double2ll_rn(predicted)); \
                         if constexpr (std::is_signed<T>::value) { \
                             final_value = predicted_T + static_cast<T>(delta); \
                         } else { \
@@ -654,7 +654,7 @@ decode_generic_kernel_upto64_optimized(
                         const double predicted = fma(smem.meta.theta1,
                                                     static_cast<double>(local_idx),
                                                     smem.meta.theta0);
-                        const T predicted_T = static_cast<T>(round(predicted));
+                        const T predicted_T = static_cast<T>(__double2ll_rn(predicted));
 
                         if constexpr (std::is_signed<T>::value) {
                             final_value = predicted_T + static_cast<T>(delta);
@@ -681,7 +681,7 @@ decode_generic_kernel_upto64_optimized(
 // ============================================================================
 
 template<typename T>
-void decompressGLECO_Phase2_Bucket(
+void decompressL3_Phase2_Bucket(
     const int32_t* d_start_indices,
     const int32_t* d_end_indices,
     const int32_t* d_model_types,
@@ -953,18 +953,18 @@ void decompressGLECO_Phase2_Bucket(
 }
 
 // Template instantiations
-template void decompressGLECO_Phase2_Bucket<uint32_t>(
+template void decompressL3_Phase2_Bucket<uint32_t>(
     const int32_t*, const int32_t*, const int32_t*, const double*,
     const uint8_t*, const int64_t*, const uint32_t*, int, int, uint32_t*);
 
-template void decompressGLECO_Phase2_Bucket<uint64_t>(
+template void decompressL3_Phase2_Bucket<uint64_t>(
     const int32_t*, const int32_t*, const int32_t*, const double*,
     const uint8_t*, const int64_t*, const uint32_t*, int, int, uint64_t*);
 
-template void decompressGLECO_Phase2_Bucket<int32_t>(
+template void decompressL3_Phase2_Bucket<int32_t>(
     const int32_t*, const int32_t*, const int32_t*, const double*,
     const uint8_t*, const int64_t*, const uint32_t*, int, int, int32_t*);
 
-template void decompressGLECO_Phase2_Bucket<int64_t>(
+template void decompressL3_Phase2_Bucket<int64_t>(
     const int32_t*, const int32_t*, const int32_t*, const double*,
     const uint8_t*, const int64_t*, const uint32_t*, int, int, int64_t*);

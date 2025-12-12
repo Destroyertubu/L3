@@ -1,5 +1,5 @@
 /**
- * GLECO Warp-Optimized Decoder
+ * L3 Warp-Optimized Decoder
  *
  * Extreme-performance decompression using:
  * - Double-buffered shared memory staging
@@ -13,7 +13,7 @@
 
 #include "bitpack_utils.cuh"
 #include "L3_format.hpp"
-#include "L3_opt.h"
+#include "L3.h"
 #include <cuda_runtime.h>
 #include <cstdint>
 #include <cmath>
@@ -135,6 +135,31 @@ __device__ __forceinline__ void warp_stage_sync(
 }
 #endif
 
+// Unified staging function that selects async or sync based on architecture
+template<int BUFFER_WORDS>
+__device__ __forceinline__ void warp_stage_ldg(
+    const uint32_t* __restrict__ global_ptr,
+    uint32_t* __restrict__ shared_ptr,
+    int words_to_load,
+    int lane_id)
+{
+#if __CUDA_ARCH__ >= 800
+    warp_stage_async<BUFFER_WORDS>(global_ptr, shared_ptr, words_to_load, lane_id);
+#else
+    warp_stage_sync<BUFFER_WORDS>(global_ptr, shared_ptr, words_to_load, lane_id);
+#endif
+}
+
+// Wait for staging to complete
+__device__ __forceinline__ void warp_stage_wait()
+{
+#if __CUDA_ARCH__ >= 800
+    warp_wait_async();
+#else
+    // Already synced in warp_stage_sync
+#endif
+}
+
 // ============================================================================
 // Warp-Optimized Decompression Kernel
 // ============================================================================
@@ -158,6 +183,8 @@ decompressWarpOptimized(
         int64_t bit_offset_base;
         double theta0;
         double theta1;
+        double theta2;  // For POLY2
+        double theta3;  // For POLY3
     } s_meta;
 
     const int partition_idx = blockIdx.x;
@@ -179,6 +206,8 @@ decompressWarpOptimized(
         int params_idx = partition_idx * 4;
         s_meta.theta0 = compressed.d_model_params[params_idx];
         s_meta.theta1 = compressed.d_model_params[params_idx + 1];
+        s_meta.theta2 = compressed.d_model_params[params_idx + 2];  // For POLY2
+        s_meta.theta3 = compressed.d_model_params[params_idx + 3];  // For POLY3
     }
     __syncthreads();
 
@@ -192,8 +221,34 @@ decompressWarpOptimized(
             if (s_meta.model_type == MODEL_DIRECT_COPY) {
                 final_value = static_cast<T>(0);
             } else {
-                double predicted = fma(s_meta.theta1, static_cast<double>(local_idx), s_meta.theta0);
-                final_value = static_cast<T>(round(predicted));
+                // Compute prediction using Horner's method based on model type
+                double x = static_cast<double>(local_idx);
+                double predicted;
+                switch (s_meta.model_type) {
+                    case MODEL_FOR_BITPACK: {
+                        // FOR: base stored in theta0 (no prediction needed when delta_bits=0)
+                        T base;
+                        if constexpr (sizeof(T) == 8) {
+                            base = static_cast<T>(__double_as_longlong(s_meta.theta0));
+                        } else {
+                            base = static_cast<T>(__double2int_rn(s_meta.theta0));
+                        }
+                        final_value = base;
+                        break;
+                    }
+                    case MODEL_POLYNOMIAL2:  // Horner: a0 + x*(a1 + x*a2)
+                        predicted = s_meta.theta0 + x * (s_meta.theta1 + x * s_meta.theta2);
+                        final_value = static_cast<T>(__double2ll_rn(predicted));
+                        break;
+                    case MODEL_POLYNOMIAL3:  // Horner: a0 + x*(a1 + x*(a2 + x*a3))
+                        predicted = s_meta.theta0 + x * (s_meta.theta1 + x * (s_meta.theta2 + x * s_meta.theta3));
+                        final_value = static_cast<T>(__double2ll_rn(predicted));
+                        break;
+                    default:  // LINEAR, CONSTANT, etc.
+                        predicted = fma(s_meta.theta1, x, s_meta.theta0);
+                        final_value = static_cast<T>(__double2ll_rn(predicted));
+                        break;
+                }
             }
             output[global_idx] = final_value;
         }
@@ -222,21 +277,12 @@ decompressWarpOptimized(
         int words_needed = (elements_per_tile * delta_bits + 31) / 32 + 2;  // +2 for cross-word
         words_needed = min(words_needed, TILE_WORDS);
 
-#if __CUDA_ARCH__ >= 800
-        warp_stage_async<TILE_WORDS>(
+        warp_stage_ldg<TILE_WORDS>(
             compressed.delta_array + tile_word_offset,
             s_tiles[warp_id][curr_buffer],
             words_needed,
             lane_id
         );
-#else
-        warp_stage_sync<TILE_WORDS>(
-            compressed.delta_array + tile_word_offset,
-            s_tiles[warp_id][curr_buffer],
-            words_needed,
-            lane_id
-        );
-#endif
     }
 
     // Process tiles with double buffering
@@ -253,28 +299,16 @@ decompressWarpOptimized(
             int next_words_needed = (elements_per_tile * delta_bits + 31) / 32 + 2;
             next_words_needed = min(next_words_needed, TILE_WORDS);
 
-#if __CUDA_ARCH__ >= 800
-            warp_stage_async<TILE_WORDS>(
+            warp_stage_ldg<TILE_WORDS>(
                 compressed.delta_array + next_tile_word_offset,
                 s_tiles[warp_id][next_buffer],
                 next_words_needed,
                 lane_id
             );
-#else
-            warp_stage_sync<TILE_WORDS>(
-                compressed.delta_array + next_tile_word_offset,
-                s_tiles[warp_id][next_buffer],
-                next_words_needed,
-                lane_id
-            );
-#endif
         }
 
-        // Wait for current tile to be ready
-#if __CUDA_ARCH__ >= 800
-        warp_wait_async();
-#endif
-        __syncwarp(FULL_MASK);
+        // Sync to ensure current tile is ready
+        warp_stage_wait();
 
         // Calculate local bit offset base for this tile
         int64_t tile_bit_offset = s_meta.bit_offset_base +
@@ -296,11 +330,11 @@ decompressWarpOptimized(
 
             T final_value;
 
-            // Special handling for 64-bit deltas (must match encoder logic at encoder.cu:396-406)
-            if (delta_bits == 64 && sizeof(T) == 8) {
-                // Extract full 64-bit value using same multi-word logic as encoder
+            // Handle deltas > 32 bits (including 64-bit) for 64-bit types
+            if (delta_bits > 32 && sizeof(T) == 8) {
+                // Extract up to 64-bit value using multi-word logic
                 uint64_t val64 = 0;
-                int bits_remaining = 64;
+                int bits_remaining = delta_bits;
                 int current_word_idx = word_idx;
                 int current_bit_offset = bit_in_word;
                 int shift_amount = 0;
@@ -318,7 +352,44 @@ decompressWarpOptimized(
                     current_word_idx++;
                     current_bit_offset = 0;
                 }
-                final_value = static_cast<T>(val64);
+
+                // Apply model and delta for 64-bit types
+                if (model_type == MODEL_DIRECT_COPY) {
+                    final_value = static_cast<T>(val64);
+                } else if (model_type == MODEL_FOR_BITPACK) {
+                    // FOR model: delta is UNSIGNED, base stored in theta0
+                    T base = static_cast<T>(__double_as_longlong(s_meta.theta0));
+                    final_value = base + static_cast<T>(val64);  // val64 is unsigned delta
+                } else {
+                    // Sign extend the extracted delta
+                    int64_t delta64 = signExtend64(val64, delta_bits);
+
+                    // Compute prediction using Horner's method based on model type
+                    double x = static_cast<double>(local_idx);
+                    double predicted;
+                    switch (model_type) {
+                        case MODEL_POLYNOMIAL2:  // Horner: a0 + x*(a1 + x*a2)
+                            predicted = s_meta.theta0 + x * (s_meta.theta1 + x * s_meta.theta2);
+                            break;
+                        case MODEL_POLYNOMIAL3:  // Horner: a0 + x*(a1 + x*(a2 + x*a3))
+                            predicted = s_meta.theta0 + x * (s_meta.theta1 + x * (s_meta.theta2 + x * s_meta.theta3));
+                            break;
+                        default:  // LINEAR, CONSTANT, etc.
+                            predicted = fma(s_meta.theta1, x, s_meta.theta0);
+                            break;
+                    }
+                    // CRITICAL: For unsigned types, clamp negative predictions to 0 to match encoder
+                    if constexpr (std::is_unsigned<T>::value) {
+                        if (predicted < 0.0) predicted = 0.0;
+                    }
+                    T predicted_T = static_cast<T>(__double2ll_rn(predicted));
+
+                    if constexpr (std::is_signed<T>::value) {
+                        final_value = static_cast<T>(static_cast<int64_t>(predicted_T) + delta64);
+                    } else {
+                        final_value = static_cast<T>(static_cast<int64_t>(predicted_T) + delta64);
+                    }
+                }
             } else {
                 // Standard path: up to 32-bit deltas
                 // Load 64-bit value for funnel shift
@@ -336,13 +407,38 @@ decompressWarpOptimized(
                     } else {
                         final_value = static_cast<T>(extracted);
                     }
+                } else if (model_type == MODEL_FOR_BITPACK) {
+                    // FOR model: delta is UNSIGNED, base stored in theta0
+                    T base;
+                    if constexpr (sizeof(T) == 8) {
+                        base = static_cast<T>(__double_as_longlong(s_meta.theta0));
+                    } else {
+                        base = static_cast<T>(__double2int_rn(s_meta.theta0));
+                    }
+                    final_value = base + static_cast<T>(extracted);  // extracted is unsigned delta
                 } else {
                     // Model-based path
                     int32_t delta = signExtend(extracted, delta_bits);
 
-                    // Compute prediction using FMA
-                    double predicted = fma(s_meta.theta1, static_cast<double>(local_idx), s_meta.theta0);
-                    T predicted_T = static_cast<T>(round(predicted));
+                    // Compute prediction using Horner's method based on model type
+                    double x = static_cast<double>(local_idx);
+                    double predicted;
+                    switch (model_type) {
+                        case MODEL_POLYNOMIAL2:  // Horner: a0 + x*(a1 + x*a2)
+                            predicted = s_meta.theta0 + x * (s_meta.theta1 + x * s_meta.theta2);
+                            break;
+                        case MODEL_POLYNOMIAL3:  // Horner: a0 + x*(a1 + x*(a2 + x*a3))
+                            predicted = s_meta.theta0 + x * (s_meta.theta1 + x * (s_meta.theta2 + x * s_meta.theta3));
+                            break;
+                        default:  // LINEAR, CONSTANT, etc.
+                            predicted = fma(s_meta.theta1, x, s_meta.theta0);
+                            break;
+                    }
+                    // CRITICAL: For unsigned types, clamp negative predictions to 0 to match encoder
+                    if constexpr (std::is_unsigned<T>::value) {
+                        if (predicted < 0.0) predicted = 0.0;
+                    }
+                    T predicted_T = static_cast<T>(__double2ll_rn(predicted));
 
                     if constexpr (std::is_signed<T>::value) {
                         final_value = predicted_T + static_cast<T>(delta);
@@ -386,10 +482,10 @@ void launchDecompressWarpOpt(
     );
 }
 
-// Wrapper for CompressedDataGLECO format
+// Wrapper for CompressedDataL3 format
 template<typename T>
 void launchDecompressWarpOpt(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     T* d_output,
     cudaStream_t stream = 0)
 {
@@ -409,10 +505,10 @@ void launchDecompressWarpOpt(
 }
 
 // Explicit instantiations
-template void launchDecompressWarpOpt<int32_t>(const CompressedDataGLECO<int32_t>*, int32_t*, cudaStream_t);
-template void launchDecompressWarpOpt<uint32_t>(const CompressedDataGLECO<uint32_t>*, uint32_t*, cudaStream_t);
-template void launchDecompressWarpOpt<int64_t>(const CompressedDataGLECO<int64_t>*, int64_t*, cudaStream_t);
-template void launchDecompressWarpOpt<uint64_t>(const CompressedDataGLECO<uint64_t>*, uint64_t*, cudaStream_t);
+template void launchDecompressWarpOpt<int32_t>(const CompressedDataL3<int32_t>*, int32_t*, cudaStream_t);
+template void launchDecompressWarpOpt<uint32_t>(const CompressedDataL3<uint32_t>*, uint32_t*, cudaStream_t);
+template void launchDecompressWarpOpt<int64_t>(const CompressedDataL3<int64_t>*, int64_t*, cudaStream_t);
+template void launchDecompressWarpOpt<uint64_t>(const CompressedDataL3<uint64_t>*, uint64_t*, cudaStream_t);
 
 template void launchDecompressWarpOpt<int32_t>(const CompressedDataOpt<int32_t>&, int32_t*, cudaStream_t);
 template void launchDecompressWarpOpt<uint32_t>(const CompressedDataOpt<uint32_t>&, uint32_t*, cudaStream_t);

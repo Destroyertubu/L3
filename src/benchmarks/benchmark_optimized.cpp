@@ -1,5 +1,5 @@
 /**
- * Benchmark optimized GLECO compression on 6 datasets
+ * Benchmark optimized L3 compression on 6 datasets
  */
 
 #include <iostream>
@@ -14,17 +14,17 @@
 
 // Forward declarations for optimized functions
 template<typename T>
-CompressedDataGLECO<T>* compressDataOptimized(
+CompressedDataL3<T>* compressDataOptimized(
     const std::vector<T>& h_data,
     int partition_size,
     CompressionStats* stats);
 
 template<typename T>
-void freeCompressedDataOptimized(CompressedDataGLECO<T>* compressed);
+void freeCompressedDataOptimized(CompressedDataL3<T>* compressed);
 
 template<typename T>
 int decompressDataOptimized(
-    const CompressedDataGLECO<T>* compressed,
+    const CompressedDataL3<T>* compressed,
     std::vector<T>& h_output,
     DecompressionStats* stats);
 
@@ -193,7 +193,7 @@ void benchmarkDataset(const DatasetInfo& info, std::ofstream& csv_file) {
 
 int main() {
     std::cout << "==================================================" << std::endl;
-    std::cout << "     GLECO Optimized Compression Benchmark       " << std::endl;
+    std::cout << "     L3 Optimized Compression Benchmark       " << std::endl;
     std::cout << "==================================================" << std::endl;
 
     // Define datasets
