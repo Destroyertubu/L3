@@ -126,13 +126,13 @@ When data must be transferred from host:
 
 ```bash
 # Vertical BitPack
-cd /root/autodl-tmp/code/L3_opt/third_party/VerticalGPU/Vertical/src
+cd /root/autodl-tmp/code/L3/third_party/VerticalGPU/Vertical/src
 LD_LIBRARY_PATH=. ./ssb/fls_q11_timed 1
 LD_LIBRARY_PATH=. ./ssb/fls_q21_timed 1
 LD_LIBRARY_PATH=. ./ssb/fls_q41_timed 1
 
 # L3
-cd /root/autodl-tmp/code/L3_opt/build
+cd /root/autodl-tmp/code/L3/build
 ./bin/ssb_q11_optimized /root/autodl-tmp/test/ssb_data
 ./bin/ssb_q21_optimized /root/autodl-tmp/test/ssb_data
 ./bin/ssb_q41_optimized /root/autodl-tmp/test/ssb_data

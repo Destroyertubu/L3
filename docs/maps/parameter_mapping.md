@@ -511,7 +511,7 @@ src/
 │       └── partitioning_v2_gpu.cu        # COST_OPTIMAL + model selection
 └── include/
     ├── L3_format.hpp                     # ModelType enum (includes 2 dead code entries)
-    ├── L3_opt.h                          # CompressedDataOpt struct
+    ├── L3.h                          # CompressedDataOpt struct
     └── bitpack_utils.cuh                 # Bit manipulation utilities
 ```
 

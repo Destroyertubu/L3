@@ -16,8 +16,8 @@ nvidia-smi
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/L3_opt.git
-cd L3_opt
+git clone https://github.com/yourusername/L3.git
+cd L3
 
 # Create build directory
 mkdir build && cd build

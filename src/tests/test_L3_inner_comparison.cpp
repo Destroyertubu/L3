@@ -752,7 +752,7 @@ int main() {
     std::cout << "Generating Report..." << std::endl;
 
     std::string report = generateMarkdownReport(all_results);
-    std::string report_path = "/root/autodl-tmp/code/L3_opt/reports/L3/L3-3-inner-comparison.md";
+    std::string report_path = "/root/autodl-tmp/code/L3/reports/L3/L3-3-inner-comparison.md";
     std::ofstream report_file(report_path);
     if (report_file.is_open()) {
         report_file << report;

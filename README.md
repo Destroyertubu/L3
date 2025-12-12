@@ -50,7 +50,7 @@ Tested on NVIDIA H20 GPU with SSB Scale Factor 20 (119,968,352 rows):
 ## Architecture
 
 ```
-L3_opt/
+L3/
 ├── include/                    # Public API headers
 │   ├── L3_codec.hpp           # Main compression/decompression API
 │   ├── L3_format.hpp          # Data format definitions
@@ -91,8 +91,8 @@ L3_opt/
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/L3_opt.git
-cd L3_opt
+git clone https://github.com/yourusername/L3.git
+cd L3
 
 # Create build directory
 mkdir -p build && cd build
@@ -285,7 +285,7 @@ The system has been tested on all 20 SOSD benchmark datasets:
 ## Project Structure
 
 ```
-L3_opt/
+L3/
 ├── CMakeLists.txt          # Build configuration
 ├── include/                # Public headers (11 files)
 ├── src/
@@ -342,7 +342,7 @@ If you use this code in your research, please cite:
 
 ## Contact
 
-- Issues: [GitHub Issues](https://github.com/yourusername/L3_opt/issues)
+- Issues: [GitHub Issues](https://github.com/yourusername/L3/issues)
 - Email: your.email@example.com
 
 ---

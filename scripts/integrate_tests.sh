@@ -5,7 +5,7 @@
 
 set -e
 
-PROJECT_ROOT="/root/autodl-tmp/test/L3_opt"
+PROJECT_ROOT="/root/autodl-tmp/test/L3"
 cd "$PROJECT_ROOT"
 
 STAGE=${1:-1}

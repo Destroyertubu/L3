@@ -6,7 +6,7 @@
 #include <cmath>
 
 // ModelType enum is defined in L3_format.hpp
-// CompressedDataOpt is defined in L3_opt.h
+// CompressedDataOpt is defined in L3.h
 
 // Partition metadata optimized for GPU (coalesced access)
 // Extended to support all polynomial models and FOR+BitPack

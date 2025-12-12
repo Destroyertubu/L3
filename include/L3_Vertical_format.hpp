@@ -21,7 +21,7 @@
  */
 
 #include "L3_format.hpp"
-#include "L3_opt.h"
+#include "L3.h"
 #include "L3_codec.hpp"  // For PartitioningStrategy
 #include <cstdint>
 #include <stdexcept>

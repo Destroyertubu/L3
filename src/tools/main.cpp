@@ -48,7 +48,7 @@
 #include "L3_codec.hpp"
 #include "L3_format.hpp"
 #include "L3_random_access.hpp"
-#include "L3_opt.h"
+#include "L3.h"
 
 // Vertical headers
 #include "L3_Vertical_format.hpp"

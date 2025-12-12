@@ -19,8 +19,8 @@ Please be respectful and constructive in all interactions with the community.
 
 1. **Fork the repository**
    ```bash
-   git clone https://github.com/yourusername/L3_opt.git
-   cd L3_opt
+   git clone https://github.com/yourusername/L3.git
+   cd L3
    ```
 
 2. **Set up development environment**
@@ -46,7 +46,7 @@ Please be respectful and constructive in all interactions with the community.
 ### Project Structure
 
 ```
-L3_opt/
+L3/
 ├── include/          # Public header files
 ├── src/
 │   ├── codec/       # Compression/decompression implementation
