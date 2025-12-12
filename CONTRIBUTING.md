@@ -19,7 +19,7 @@ Please be respectful and constructive in all interactions with the community.
 
 1. **Fork the repository**
    ```bash
-   git clone https://github.com/yourusername/L3.git
+   git clone <REPOSITORY_URL>
    cd L3
    ```
 

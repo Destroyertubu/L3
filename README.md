@@ -323,8 +323,7 @@ If you use this code in your research, please cite:
 
 ## Contact
 
-- Issues: [GitHub Issues](https://github.com/yourusername/L3/issues)
-- Email: your.email@example.com
+For questions or issues, please use the GitHub Issues page of this repository.
 
 ---
 

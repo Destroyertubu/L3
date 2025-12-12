@@ -13,7 +13,6 @@ Transformation:
 
 import sys
 import random
-import os
 
 def reverse_host(email):
     """
@@ -38,10 +37,8 @@ def reverse_host(email):
     return f"{reversed_host}@{user}"
 
 def main():
-    # Use environment variable or default to relative path
-    data_dir = os.environ.get('DATA_DIR', './data/sosd/strings')
-    input_file = os.path.join(data_dir, "email.txt")
-    output_file = os.path.join(data_dir, "email_leco_30k.txt")
+    input_file = "/root/autodl-tmp/test/data/sosd/strings/email.txt"
+    output_file = "/root/autodl-tmp/test/data/sosd/strings/email_leco_30k.txt"
     target_count = 30000
     random_seed = 42
 
