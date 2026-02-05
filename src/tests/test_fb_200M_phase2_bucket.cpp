@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
     std::cout << std::endl;
 
     // Load dataset
-    const char* filename = "/root/autodl-tmp/test/data/fb_200M_uint64.bin";
+    const char* filename = "data/fb_200M_uint64.bin";
 
     // Test with different sizes
     std::vector<size_t> test_sizes = {1000000, 8000000, 64000000, 200000000};

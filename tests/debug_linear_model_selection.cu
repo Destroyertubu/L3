@@ -144,7 +144,7 @@ void debugPartition(const std::vector<uint64_t>& data, int start, int end) {
 }
 
 int main(int argc, char** argv) {
-    std::string filename = "/root/autodl-tmp/test/data/sosd/1-linear_200M_uint64.bin";
+    std::string filename = "data/sosd/1-linear_200M_uint64.bin";
     size_t max_elements = 10000000;  // 10M like original test
 
     std::cout << "Debug: Linear Model Selection Analysis" << std::endl;

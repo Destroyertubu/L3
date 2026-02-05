@@ -20,13 +20,13 @@
  */
 struct CostOptimalConfig {
     int analysis_block_size = 2048;      // Size of blocks for delta-bits analysis
-    int min_partition_size = 256;         // Minimum partition size (warp-aligned)
-    int max_partition_size = 8192;        // Maximum partition size
-    int target_partition_size = 2048;     // Preferred partition size
+    int min_partition_size = 256;         // Initial partition size (warp-aligned), merge from here
+    int max_partition_size = 8192;        // Maximum partition size after merging
     int breakpoint_threshold = 2;         // Delta-bits change to trigger breakpoint
     float merge_benefit_threshold = 0.05f; // Minimum benefit (5%) to merge
     int max_merge_rounds = 4;             // Maximum merge iterations
     bool enable_merging = true;           // Enable cost-based merging
+    bool enable_rle = true;               // Enable RLE/CONSTANT model selection
 
     // Polynomial model selection configuration (Stage 2)
     bool enable_polynomial_models = false; // Enable POLY2/POLY3 model selection (default: off for compatibility)
@@ -37,7 +37,6 @@ struct CostOptimalConfig {
     // Factory methods
     static CostOptimalConfig balanced() {
         CostOptimalConfig config;
-        config.target_partition_size = 2048;
         config.min_partition_size = 256;
         config.max_partition_size = 8192;
         return config;
@@ -45,8 +44,7 @@ struct CostOptimalConfig {
 
     static CostOptimalConfig highCompression() {
         CostOptimalConfig config;
-        config.target_partition_size = 1024;
-        config.min_partition_size = 256;
+        config.min_partition_size = 128;
         config.max_partition_size = 4096;
         config.breakpoint_threshold = 1;  // More sensitive
         return config;
@@ -54,7 +52,6 @@ struct CostOptimalConfig {
 
     static CostOptimalConfig highThroughput() {
         CostOptimalConfig config;
-        config.target_partition_size = 4096;
         config.min_partition_size = 512;
         config.max_partition_size = 16384;
         config.breakpoint_threshold = 3;  // Less sensitive

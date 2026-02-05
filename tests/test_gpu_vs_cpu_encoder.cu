@@ -39,7 +39,7 @@ int verifyResults(const T* output, const T* original, size_t n) {
 }
 
 int main(int argc, char** argv) {
-    string data_file = "/root/autodl-tmp/test/data/sosd/2-normal_200M_uint64.bin";
+    string data_file = "data/sosd/2-normal_200M_uint64.bin";
     size_t max_elements = 200000000;  // Full 200M
 
     if (argc > 1) data_file = argv[1];

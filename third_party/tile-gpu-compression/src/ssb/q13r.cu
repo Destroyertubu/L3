@@ -74,7 +74,7 @@ __global__ void QueryKernel(
   __syncthreads();
 
   // Q1.3: d_weeknuminyear = 6 and d_year = 1994
-  // Week 6 of 1994 spans approximately Jan 31 - Feb 6, 1994
+  // Week 6 of 1994 spans Feb 6 - Feb 12, 1994
   #pragma unroll
   for (int ITEM = 0; ITEM < ITEMS_PER_THREAD; ++ITEM)
   {
@@ -82,7 +82,7 @@ __global__ void QueryKernel(
     selection_flags[ITEM] = 1;
 
     if ((threadIdx.x + (BLOCK_THREADS * ITEM) < num_tile_items))
-      selection_flags[ITEM] = (items[ITEM] >= 19940131 && items[ITEM] <= 19940206);
+      selection_flags[ITEM] = (items[ITEM] >= 19940206 && items[ITEM] <= 19940212);
   }
 
   __syncthreads();

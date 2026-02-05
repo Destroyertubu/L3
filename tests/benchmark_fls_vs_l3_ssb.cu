@@ -459,7 +459,7 @@ ColumnBenchmark benchmarkColumn(const std::string& name, const std::vector<uint3
 // ============================================================================
 
 int main(int argc, char** argv) {
-    std::string data_dir = "/root/autodl-tmp/test/ssb_data";
+    std::string data_dir = "data/ssb";
     if (argc > 1) data_dir = argv[1];
 
     std::cout << "================================================================" << std::endl;

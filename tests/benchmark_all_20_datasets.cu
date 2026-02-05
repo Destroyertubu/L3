@@ -386,7 +386,7 @@ BenchmarkResult runBenchmark(
 }
 
 int main(int argc, char** argv) {
-    std::string base_path = "/root/autodl-tmp/test/data/sosd";
+    std::string base_path = "data/sosd";
     if (argc > 1) base_path = argv[1];
 
     cudaSetDevice(0);

@@ -151,7 +151,7 @@ DatasetResult testDataset(const std::string& filepath, const std::string& dtype,
 int main(int argc, char** argv) {
     std::cout << "===== V2 Partitioning Strategy Test on All SOSD Datasets =====\n" << std::endl;
 
-    std::string data_dir = "/root/autodl-tmp/test/data/sosd";
+    std::string data_dir = "data/sosd";
     int num_runs = 3;
 
     // Parse args

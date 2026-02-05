@@ -16,7 +16,7 @@
 #include "L3_codec.hpp"
 #include "L3_format.hpp"
 #include "L3_random_access.hpp"
-#include "L3.h"
+#include "L3_opt.h"
 #include "encoder_cost_optimal_gpu_merge_v2.cuh"
 
 #define CUDA_CHECK(call) do { \

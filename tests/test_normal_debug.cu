@@ -53,7 +53,7 @@ int main() {
     std::cout << "=== Debug GPU Merge on Normal Data ===" << std::endl;
 
     // Load a small subset for debugging
-    std::string normal_file = "/root/autodl-tmp/test/data/sosd/2-normal_200M_uint64.bin";
+    std::string normal_file = "data/sosd/2-normal_200M_uint64.bin";
     auto data = loadBinaryFile<uint64_t>(normal_file, 50000);
 
     if (data.empty()) {
@@ -73,7 +73,7 @@ int main() {
 
     std::cout << "\nConfig:" << std::endl;
     std::cout << "  analysis_block_size: " << config.analysis_block_size << std::endl;
-    std::cout << "  target_partition_size: " << config.target_partition_size << std::endl;
+    std::cout << "  min_partition_size: " << config.min_partition_size << std::endl;
     std::cout << "  max_partition_size: " << config.max_partition_size << std::endl;
     std::cout << "  merge_benefit_threshold: " << config.merge_benefit_threshold << std::endl;
     std::cout << "  max_merge_rounds: " << config.max_merge_rounds << std::endl;

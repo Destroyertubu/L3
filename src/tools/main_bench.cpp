@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <random>
 #include <cuda_runtime.h>
-#include "L3.h"
+#include "L3_opt.h"
 
 // CUDA error checking
 #define CUDA_CHECK(call)                                                      \

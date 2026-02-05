@@ -243,7 +243,7 @@ int main() {
 
     std::vector<TestResult> results;
 
-    const std::string base_path = "/root/autodl-tmp/test/data/sosd/";
+    const std::string base_path = "data/sosd/";
 
     // Test all 7 datasets
     results.push_back(runComparison<uint32_t>(base_path + "books_200M_uint32.bin", "books_200M", "uint32"));

@@ -711,8 +711,8 @@ void generateReports(const std::vector<TestResult>& results, const std::string& 
 // ============================================================================
 
 int main(int argc, char** argv) {
-    std::string data_dir = "/root/autodl-tmp/test/data/sosd";
-    std::string output_dir = "/root/autodl-tmp/code/L3/reports/L3/All/ultra-comprehensive-v2";
+    std::string data_dir = "data/sosd";
+    std::string output_dir = "reports/L3/All/ultra-comprehensive-v2";
 
     if (argc > 1) data_dir = argv[1];
     if (argc > 2) output_dir = argv[2];

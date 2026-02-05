@@ -1,0 +1,104 @@
+/*
+ * Copyright 2022 HEAVY.AI, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#pragma once
+
+extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb(int op,
+                                            int arg1_type,
+                                            int8_t* arg1_coords,
+                                            int64_t arg1_coords_size,
+                                            int32_t* arg1_meta1,
+                                            int64_t arg1_meta1_size,
+                                            int32_t* arg1_meta2,
+                                            int64_t arg1_meta2_size,
+                                            int32_t arg1_ic,
+                                            int32_t arg1_srid_in,
+                                            int32_t arg1_srid_out,
+                                            int arg2_type,
+                                            int8_t* arg2_coords,
+                                            int64_t arg2_coords_size,
+                                            int32_t* arg2_meta1,
+                                            int64_t arg2_meta1_size,
+                                            int32_t* arg2_meta2,
+                                            int64_t arg2_meta2_size,
+                                            int32_t arg2_ic,
+                                            int32_t arg2_srid_in,
+                                            int32_t arg2_srid_out,
+                                            int* result_type,
+                                            int8_t** result_coords,
+                                            int64_t* result_coords_size,
+                                            int32_t** result_meta1,
+                                            int64_t* result_meta1_size,
+                                            int32_t** result_meta2,
+                                            int64_t* result_meta2_size,
+                                            int32_t result_srid_out);
+
+extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb_Predicate(int op,
+                                                      int arg1_type,
+                                                      int8_t* arg1_coords,
+                                                      int64_t arg1_coords_size,
+                                                      int32_t* arg1_meta1,
+                                                      int64_t arg1_meta1_size,
+                                                      int32_t* arg1_meta2,
+                                                      int64_t arg1_meta2_size,
+                                                      int32_t arg1_ic,
+                                                      int32_t arg1_srid_in,
+                                                      int32_t arg1_srid_out,
+                                                      int arg2_type,
+                                                      int8_t* arg2_coords,
+                                                      int64_t arg2_coords_size,
+                                                      int32_t* arg2_meta1,
+                                                      int64_t arg2_meta1_size,
+                                                      int32_t* arg2_meta2,
+                                                      int64_t arg2_meta2_size,
+                                                      int32_t arg2_ic,
+                                                      int32_t arg2_srid_in,
+                                                      int32_t arg2_srid_out,
+                                                      bool* result);
+
+extern "C" RUNTIME_EXPORT bool Geos_Wkb_double(int op,
+                                               int arg1_type,
+                                               int8_t* arg1_coords,
+                                               int64_t arg1_coords_size,
+                                               int32_t* arg1_meta1,
+                                               int64_t arg1_meta1_size,
+                                               int32_t* arg1_meta2,
+                                               int64_t arg1_meta2_size,
+                                               int32_t arg1_ic,
+                                               int32_t arg1_srid_in,
+                                               int32_t arg1_srid_out,
+                                               double arg2,
+                                               int* result_type,
+                                               int8_t** result_coords,
+                                               int64_t* result_coords_size,
+                                               int32_t** result_meta1,
+                                               int64_t* result_meta1_size,
+                                               int32_t** result_meta2,
+                                               int64_t* result_meta2_size,
+                                               int32_t result_srid_out);
+
+extern "C" RUNTIME_EXPORT bool Geos_Wkb(int op,
+                                        int arg_type,
+                                        int8_t* arg_coords,
+                                        int64_t arg_coords_size,
+                                        int32_t* arg_meta1,
+                                        int64_t arg_meta1_size,
+                                        int32_t* arg_meta2,
+                                        int64_t arg_meta2_size,
+                                        int32_t arg_ic,
+                                        int32_t arg_srid_in,
+                                        int32_t arg_srid_out,
+                                        bool* result);

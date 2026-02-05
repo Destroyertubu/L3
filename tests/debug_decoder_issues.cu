@@ -231,7 +231,7 @@ void testSingleDataset(const std::string& path, const std::string& name, size_t 
 }
 
 int main(int argc, char** argv) {
-    std::string data_dir = "/root/autodl-tmp/test/data/sosd";
+    std::string data_dir = "data/sosd";
 
     if (argc > 1) data_dir = argv[1];
 

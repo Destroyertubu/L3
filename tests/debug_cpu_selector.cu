@@ -15,7 +15,7 @@
 using namespace std;
 
 int main() {
-    string data_file = "/root/autodl-tmp/test/data/sosd/2-normal_200M_uint64.bin";
+    string data_file = "data/sosd/2-normal_200M_uint64.bin";
 
     cout << "Loading dataset: " << data_file << endl;
 

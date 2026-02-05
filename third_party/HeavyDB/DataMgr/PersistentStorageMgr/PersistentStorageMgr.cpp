@@ -1,0 +1,243 @@
+/*
+ * Copyright 2022 HEAVY.AI, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "PersistentStorageMgr.h"
+#include "Catalog/Catalog.h"
+#include "DataMgr/FileMgr/CachingGlobalFileMgr.h"
+#include "DataMgr/ForeignStorage/CachingForeignStorageMgr.h"
+#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
+
+#ifdef ENABLE_ARROW
+#include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
+#endif
+
+PersistentStorageMgr::PersistentStorageMgr(
+    const std::string& data_dir,
+    const size_t num_reader_threads,
+    const File_Namespace::DiskCacheConfig& disk_cache_config)
+    : AbstractBufferMgr(0), disk_cache_config_(disk_cache_config) {
+  fsi_ = std::make_shared<ForeignStorageInterface>();
+#ifdef ENABLE_ARROW
+  ::registerArrowForeignStorage(fsi_);
+  ::registerArrowCsvForeignStorage(fsi_);
+#endif
+
+  disk_cache_ =
+      disk_cache_config_.isEnabled()
+          ? std::make_unique<foreign_storage::ForeignStorageCache>(disk_cache_config)
+          : nullptr;
+  if (disk_cache_config_.isEnabledForMutableTables()) {
+    CHECK(disk_cache_);
+    global_file_mgr_ = std::make_unique<File_Namespace::CachingGlobalFileMgr>(
+        0, fsi_, data_dir, num_reader_threads, disk_cache_.get());
+  } else {
+    global_file_mgr_ = std::make_unique<File_Namespace::GlobalFileMgr>(
+        0, fsi_, data_dir, num_reader_threads);
+  }
+
+  if (disk_cache_config_.isEnabledForFSI()) {
+    CHECK(disk_cache_);
+    foreign_storage_mgr_ =
+        std::make_unique<foreign_storage::CachingForeignStorageMgr>(disk_cache_.get());
+  } else {
+    foreign_storage_mgr_ = std::make_unique<foreign_storage::ForeignStorageMgr>();
+  }
+}
+
+AbstractBuffer* PersistentStorageMgr::createBuffer(const ChunkKey& chunk_key,
+                                                   const size_t page_size,
+                                                   const size_t initial_size) {
+  auto table_lock = getTableAccessLock(chunk_key);
+  return getStorageMgrForTableKey(chunk_key)->createBuffer(
+      chunk_key, page_size, initial_size);
+}
+
+void PersistentStorageMgr::deleteBuffer(const ChunkKey& chunk_key, const bool purge) {
+  auto table_lock = getTableAccessLock(chunk_key);
+  getStorageMgrForTableKey(chunk_key)->deleteBuffer(chunk_key, purge);
+}
+
+void PersistentStorageMgr::deleteBuffersWithPrefix(const ChunkKey& chunk_key_prefix,
+                                                   const bool purge) {
+  auto table_lock = getTableAccessLock(chunk_key_prefix);
+  getStorageMgrForTableKey(chunk_key_prefix)
+      ->deleteBuffersWithPrefix(chunk_key_prefix, purge);
+}
+
+AbstractBuffer* PersistentStorageMgr::getBuffer(const ChunkKey& chunk_key,
+                                                const size_t num_bytes) {
+  auto table_lock = getTableAccessLock(chunk_key);
+  return getStorageMgrForTableKey(chunk_key)->getBuffer(chunk_key, num_bytes);
+}
+
+void PersistentStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
+                                       AbstractBuffer* destination_buffer,
+                                       const size_t num_bytes) {
+  auto table_lock = getTableAccessLock(chunk_key);
+  getStorageMgrForTableKey(chunk_key)->fetchBuffer(
+      chunk_key, destination_buffer, num_bytes);
+}
+
+AbstractBuffer* PersistentStorageMgr::putBuffer(const ChunkKey& chunk_key,
+                                                AbstractBuffer* source_buffer,
+                                                const size_t num_bytes) {
+  auto table_lock = getTableAccessLock(chunk_key);
+  return getStorageMgrForTableKey(chunk_key)->putBuffer(
+      chunk_key, source_buffer, num_bytes);
+}
+
+void PersistentStorageMgr::getChunkMetadataVecForKeyPrefix(
+    ChunkMetadataVector& chunk_metadata,
+    const ChunkKey& key_prefix) {
+  auto table_lock = getTableAccessLock(key_prefix);
+  getStorageMgrForTableKey(key_prefix)
+      ->getChunkMetadataVecForKeyPrefix(chunk_metadata, key_prefix);
+}
+
+bool PersistentStorageMgr::isBufferOnDevice(const ChunkKey& chunk_key) {
+  auto table_lock = getTableAccessLock(chunk_key);
+  return global_file_mgr_->isBufferOnDevice(chunk_key);
+}
+
+std::string PersistentStorageMgr::printSlabs() {
+  return global_file_mgr_->printSlabs();
+}
+
+size_t PersistentStorageMgr::getMaxSize() const {
+  return global_file_mgr_->getMaxSize();
+}
+
+size_t PersistentStorageMgr::getInUseSize() const {
+  return global_file_mgr_->getInUseSize();
+}
+
+size_t PersistentStorageMgr::getAllocated() const {
+  return global_file_mgr_->getAllocated();
+}
+
+bool PersistentStorageMgr::isAllocationCapped() const {
+  return global_file_mgr_->isAllocationCapped();
+}
+
+void PersistentStorageMgr::checkpoint() {
+  global_file_mgr_->checkpoint();
+}
+
+void PersistentStorageMgr::checkpoint(const int db_id, const int tb_id) {
+  auto table_lock = getTableAccessLock({db_id, tb_id});
+  global_file_mgr_->checkpoint(db_id, tb_id);
+}
+
+AbstractBuffer* PersistentStorageMgr::alloc(const size_t num_bytes) {
+  return global_file_mgr_->alloc(num_bytes);
+}
+
+void PersistentStorageMgr::free(AbstractBuffer* buffer) {
+  global_file_mgr_->free(buffer);
+}
+
+MgrType PersistentStorageMgr::getMgrType() {
+  return PERSISTENT_STORAGE_MGR;
+}
+
+std::string PersistentStorageMgr::getStringMgrType() {
+  return ToString(PERSISTENT_STORAGE_MGR);
+}
+
+size_t PersistentStorageMgr::getNumChunks() {
+  return global_file_mgr_->getNumChunks();
+}
+
+File_Namespace::GlobalFileMgr* PersistentStorageMgr::getGlobalFileMgr() const {
+  return global_file_mgr_.get();
+}
+
+void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
+  {
+    auto table_lock = getTableAccessLock({db_id, table_id});
+    getStorageMgrForTableKey({db_id, table_id})->removeTableRelatedDS(db_id, table_id);
+  }
+  deleteTableAccessMutex({db_id, table_id});
+}
+
+void PersistentStorageMgr::removeMutableTableCacheData(const int db_id,
+                                                       const int tb_id) const {
+  if (disk_cache_config_.isEnabledForMutableTables()) {
+    // If the disk cache supports mutable tables then clear the cached data.
+    if (auto cfm =
+            dynamic_cast<File_Namespace::CachingGlobalFileMgr*>(global_file_mgr_.get())) {
+      cfm->removeCachedData(db_id, tb_id);
+    }
+  }
+}
+
+bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) const {
+  CHECK(has_table_prefix(chunk_key));
+  auto db_id = chunk_key[CHUNK_KEY_DB_IDX];
+  auto table_id = chunk_key[CHUNK_KEY_TABLE_IDX];
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+
+  // if catalog doesnt exist at this point we must be in an old migration.
+  // Old migration can not, at this point 5.5.1, be using foreign storage
+  // so this hack is to avoid the crash, when migrating old
+  // catalogs that have not been upgraded over time due to issue
+  // [BE-5728]
+  if (!catalog) {
+    return false;
+  }
+
+  auto table = catalog->getMetadataForTable(table_id, false);
+  CHECK(table);
+  return table->storageType == StorageType::FOREIGN_TABLE;
+}
+
+AbstractBufferMgr* PersistentStorageMgr::getStorageMgrForTableKey(
+    const ChunkKey& table_key) const {
+  if (isForeignStorage(table_key)) {
+    return foreign_storage_mgr_.get();
+  } else {
+    return global_file_mgr_.get();
+  }
+}
+
+foreign_storage::ForeignStorageMgr* PersistentStorageMgr::getForeignStorageMgr() const {
+  return foreign_storage_mgr_.get();
+}
+
+foreign_storage::ForeignStorageCache* PersistentStorageMgr::getDiskCache() const {
+  return disk_cache_ ? disk_cache_.get() : nullptr;
+}
+
+std::unique_lock<std::mutex> PersistentStorageMgr::getTableAccessLock(
+    const ChunkKey& table_key) {
+  return std::unique_lock<std::mutex>(getTableAccessMutex(table_key));
+}
+
+std::mutex& PersistentStorageMgr::getTableAccessMutex(const ChunkKey& table_key) {
+  CHECK(has_table_prefix(table_key));
+
+  std::lock_guard<std::mutex> lock(table_access_mutex_map_mutex_);
+  return table_access_mutex_map_[{table_key[CHUNK_KEY_DB_IDX],
+                                  table_key[CHUNK_KEY_TABLE_IDX]}];
+}
+
+void PersistentStorageMgr::deleteTableAccessMutex(const ChunkKey& table_key) {
+  CHECK(has_table_prefix(table_key));
+
+  std::lock_guard<std::mutex> lock(table_access_mutex_map_mutex_);
+  table_access_mutex_map_.erase(
+      {table_key[CHUNK_KEY_DB_IDX], table_key[CHUNK_KEY_TABLE_IDX]});
+}

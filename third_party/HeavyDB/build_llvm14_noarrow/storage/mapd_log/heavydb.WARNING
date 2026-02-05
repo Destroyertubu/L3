@@ -1,0 +1,7 @@
+2026-01-29T19:05:06.518839 W 2341154 18 4 CudaMgr.cpp:702 `/usr/local/cuda/nvvm/libdevice/libdevice.10.bc` does not exist. Discarding `/usr/local/cuda` as CUDA installation path with libdevice.
+2026-01-29T19:05:06.518973 W 2341154 18 4 Execute.cpp:332 File /libdevice.10.bc does not exist; support for some UDF functions might not be available.
+2026-01-29T19:05:06.537187 W 2341154 18 4 Execute.cpp:420 Source of rt_libdevice_module LLVM module is unavailable. The module will be unavailable.
+2026-01-29T19:24:09.842894 W 2341154 278 8 Execute.cpp:420 Source of rt_libdevice_module LLVM module is unavailable. The module will be unavailable.
+2026-01-29T19:24:11.254542 W 2341154 293 14 Execute.cpp:420 Source of rt_libdevice_module LLVM module is unavailable. The module will be unavailable.
+2026-01-29T19:24:11.982660 W 2341154 328 28 Execute.cpp:420 Source of rt_libdevice_module LLVM module is unavailable. The module will be unavailable.
+2026-01-29T19:24:15.785380 W 2341154 373 52 Execute.cpp:420 Source of rt_libdevice_module LLVM module is unavailable. The module will be unavailable.

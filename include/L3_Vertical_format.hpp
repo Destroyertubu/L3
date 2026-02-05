@@ -21,7 +21,7 @@
  */
 
 #include "L3_format.hpp"
-#include "L3.h"
+#include "L3_opt.h"
 #include "L3_codec.hpp"  // For PartitioningStrategy
 #include <cstdint>
 #include <stdexcept>
@@ -34,10 +34,41 @@ constexpr uint32_t L3_Vertical_MAGIC = 0x4C334653;  // "L3FS" in ASCII
 // Mini-Vector Constants (Inspired by Vertical GPU paper)
 // ============================================================================
 
-// Mini-vector size: 256 values (8 values per thread * 32 threads/warp)
+// Mini-vector size: configurable via compile-time macros
+// Supported configurations (pass via -D flag):
+//   - L3_VERTICAL_256_CONFIG:  256 values (8 values per thread * 32 threads/warp)
+//   - L3_VERTICAL_512_CONFIG:  512 values (16 values per thread * 32 threads/warp)
+//   - L3_VERTICAL_1024_CONFIG: 1024 values (32 values per thread * 32 threads/warp)
+//   - L3_VERTICAL_2048_CONFIG: 2048 values (64 values per thread * 32 threads/warp)
+// Default (no macro defined): 1024 values
+
+// Only define default if no config is specified
+#if !defined(L3_VERTICAL_256_CONFIG) && !defined(L3_VERTICAL_512_CONFIG) && !defined(L3_VERTICAL_1024_CONFIG) && !defined(L3_VERTICAL_2048_CONFIG) && !defined(L3_VERTICAL_2048_64LANE_CONFIG)
+#define L3_VERTICAL_1024_CONFIG
+#endif
+
+#if defined(L3_VERTICAL_2048_64LANE_CONFIG)
+// 2048 values with 64 lanes (2 warps per mini-vector)
+constexpr int MINI_VECTOR_SIZE = 2048;
+constexpr int VALUES_PER_THREAD = 32;
+constexpr int LANES_PER_MINI_VECTOR = 64;  // 2 warps
+#elif defined(L3_VERTICAL_2048_CONFIG)
+constexpr int MINI_VECTOR_SIZE = 2048;
+constexpr int VALUES_PER_THREAD = 64;
+constexpr int LANES_PER_MINI_VECTOR = 32;  // 1 warp
+#elif defined(L3_VERTICAL_1024_CONFIG)
+constexpr int MINI_VECTOR_SIZE = 1024;
+constexpr int VALUES_PER_THREAD = 32;
+constexpr int LANES_PER_MINI_VECTOR = 32;
+#elif defined(L3_VERTICAL_512_CONFIG)
+constexpr int MINI_VECTOR_SIZE = 512;
+constexpr int VALUES_PER_THREAD = 16;
+constexpr int LANES_PER_MINI_VECTOR = 32;
+#elif defined(L3_VERTICAL_256_CONFIG)
 constexpr int MINI_VECTOR_SIZE = 256;
 constexpr int VALUES_PER_THREAD = 8;
-constexpr int LANES_PER_MINI_VECTOR = 32;  // Warp size
+constexpr int LANES_PER_MINI_VECTOR = 32;
+#endif
 
 // Threshold: minimum partition size for interleaved encoding (legacy, not used)
 constexpr int INTERLEAVED_THRESHOLD = 512;
@@ -47,6 +78,93 @@ constexpr int MAX_BIT_WIDTH = 64;
 
 // Register buffer size for prefetching
 constexpr int REGISTER_BUFFER_WORDS = 4;
+
+// ============================================================================
+// Variable Parameter Storage Support
+// ============================================================================
+
+/**
+ * Get the number of parameters needed for each model type.
+ * Used for variable-length parameter storage optimization.
+ *
+ * MODEL_CONSTANT: 4 params (num_runs, base_value, value_bits, count_bits)
+ *                 Note: RLE mode also needs params for decoding
+ * MODEL_LINEAR: 2 params (θ₀ intercept, θ₁ slope)
+ * MODEL_POLYNOMIAL2: 3 params (θ₀, θ₁, θ₂)
+ * MODEL_POLYNOMIAL3: 4 params (θ₀, θ₁, θ₂, θ₃)
+ * MODEL_FOR_BITPACK: 1 param (base value)
+ * MODEL_DIRECT_COPY: 0 params
+ */
+__host__ __device__ __forceinline__
+int getParamCount(int model_type, int delta_bits = 0) {
+    switch (model_type) {
+        case MODEL_CONSTANT:
+            // Both single-run CONSTANT and RLE need 4 params for unified decoding
+            return 4;
+        case MODEL_LINEAR:       return 2;
+        case MODEL_POLYNOMIAL2:  return 3;
+        case MODEL_POLYNOMIAL3:  return 4;
+        case MODEL_FOR_BITPACK:  return 1;
+        case MODEL_DIRECT_COPY:  return 0;
+        default:                 return 4;  // Conservative default
+    }
+}
+
+// ============================================================================
+// V5 Optimized Metadata Structure (Cache-line aligned)
+// ============================================================================
+
+/**
+ * Partition Metadata V5 - Cache-Optimized Structure
+ *
+ * All partition metadata is consolidated into a single 64-byte structure
+ * (exactly 1 cache line on most GPUs) to minimize L1 cache misses.
+ *
+ * Previous approach: 6+ separate array accesses per partition
+ *   d_start_indices[pid]       → L1 miss
+ *   d_end_indices[pid]         → possible hit (same cache line)
+ *   d_model_types[pid]         → L1 miss
+ *   d_delta_bits[pid]          → L1 miss
+ *   d_num_mini_vectors[pid]    → L1 miss
+ *   d_interleaved_offsets[pid] → L1 miss
+ *   d_model_params[pid*4..+3]  → multiple misses
+ *
+ * V5 approach: Single 64-byte structure load
+ *   d_metadata_v5[pid]         → 1-2 cache line loads
+ *
+ * Expected L1 hit rate improvement: 35% → 70%+
+ */
+struct alignas(64) PartitionMetadataV5 {
+    // Core indices (16 bytes)
+    int32_t start_idx;           // Partition start index
+    int32_t end_idx;             // Partition end index (exclusive)
+    int32_t model_type;          // Model type (CONSTANT, LINEAR, POLY2, POLY3, FOR)
+    int32_t delta_bits;          // Bits per delta value
+
+    // Mini-vector info (16 bytes)
+    int32_t num_mini_vectors;    // Number of complete mini-vectors
+    int32_t tail_size;           // Remaining values after mini-vectors
+    int64_t interleaved_offset;  // Word offset into interleaved array
+
+    // Model parameters (32 bytes)
+    double params[4];            // Model parameters (θ₀, θ₁, θ₂, θ₃)
+
+    // Total: 64 bytes = 1 cache line
+
+    // Default constructor
+    __host__ __device__
+    PartitionMetadataV5()
+        : start_idx(0), end_idx(0), model_type(0), delta_bits(0),
+          num_mini_vectors(0), tail_size(0), interleaved_offset(0),
+          params{0.0, 0.0, 0.0, 0.0} {}
+
+    // Helper: Get partition size
+    __host__ __device__ __forceinline__
+    int32_t size() const { return end_idx - start_idx; }
+};
+
+// Verify size at compile time
+static_assert(sizeof(PartitionMetadataV5) == 64, "PartitionMetadataV5 must be 64 bytes");
 
 // ============================================================================
 // Interleaved Layout Structure
@@ -121,9 +239,14 @@ struct CompressedDataVertical {
     int32_t* d_start_indices;
     int32_t* d_end_indices;
     int32_t* d_model_types;
-    double*  d_model_params;           // [num_partitions * 4]
+    double*  d_model_params;           // Variable-length or [num_partitions * 4] based on use_variable_params
     int32_t* d_delta_bits;
     int64_t* d_error_bounds;
+
+    // Variable parameter storage (NEW)
+    int64_t* d_param_offsets;          // [num_partitions] Offset into d_model_params for each partition
+    int64_t  total_param_count;        // Total number of parameters in d_model_params
+    bool     use_variable_params;      // true = variable-length params, false = fixed 4 params/partition
 
     // Predicate pushdown bounds (optional)
     T* d_partition_min_values;
@@ -139,6 +262,10 @@ struct CompressedDataVertical {
     int32_t* d_num_mini_vectors;       // [num_partitions] mini-vectors per partition
     int32_t* d_tail_sizes;             // [num_partitions] tail values per partition
     int64_t* d_interleaved_offsets;    // [num_partitions] word offset into interleaved array
+
+    // ========== V5 Optimized Metadata (NEW) ==========
+    PartitionMetadataV5* d_metadata_v5;  // [num_partitions] Consolidated metadata (64B per partition)
+    bool use_v5_metadata;                // true = use d_metadata_v5, false = use separate arrays
 
     // Statistics
     int64_t  total_interleaved_partitions;  // Always equals num_partitions now
@@ -162,10 +289,13 @@ struct CompressedDataVertical {
           d_start_indices(nullptr), d_end_indices(nullptr),
           d_model_types(nullptr), d_model_params(nullptr),
           d_delta_bits(nullptr), d_error_bounds(nullptr),
+          d_param_offsets(nullptr), total_param_count(0),
+          use_variable_params(false),
           d_partition_min_values(nullptr), d_partition_max_values(nullptr),
           d_interleaved_deltas(nullptr), interleaved_delta_words(0),
           d_num_mini_vectors(nullptr), d_tail_sizes(nullptr),
           d_interleaved_offsets(nullptr),
+          d_metadata_v5(nullptr), use_v5_metadata(false),
           total_interleaved_partitions(0),
           kernel_time_ms(0.0f),
           d_self(nullptr),
@@ -193,6 +323,11 @@ struct CompressedDataVertical {
         result.d_error_bounds = base.d_error_bounds;
         result.d_partition_min_values = base.d_partition_min_values;
         result.d_partition_max_values = base.d_partition_max_values;
+
+        // Variable params: base format uses fixed layout
+        result.d_param_offsets = nullptr;
+        result.total_param_count = base.num_partitions * 4;
+        result.use_variable_params = false;
 
         // Legacy fields for BRANCHLESS mode compatibility
         result.d_sequential_deltas = base.delta_array;
@@ -289,13 +424,19 @@ struct VerticalConfig {
 
     // Cost-optimal partitioning parameters (used when partitioning_strategy == COST_OPTIMAL)
     int cost_analysis_block_size;       // Size of blocks for delta-bits analysis
-    int cost_min_partition_size;        // Minimum partition size (warp-aligned)
-    int cost_max_partition_size;        // Maximum partition size
-    int cost_target_partition_size;     // Preferred partition size
+    int cost_min_partition_size;        // Initial partition size (warp-aligned), merge from here
+    int cost_max_partition_size;        // Maximum partition size after merging
     int cost_breakpoint_threshold;      // Delta-bits change to trigger breakpoint
     float cost_merge_benefit_threshold; // Minimum benefit (5%) to merge
     int cost_max_merge_rounds;          // Maximum merge iterations
     bool cost_enable_merging;           // Enable cost-based merging
+
+    // Encoder kernel block size configuration (NEW)
+    int encoder_selector_block_size;    // Block size for adaptive/fixed model selector kernel (32-1024)
+
+    // Model selection control
+    bool enable_rle;                    // Enable RLE/CONSTANT model (default: true)
+                                        // Set to false to skip CONSTANT model selection
 
     // Default config
     VerticalConfig()
@@ -314,11 +455,12 @@ struct VerticalConfig {
           cost_analysis_block_size(2048),
           cost_min_partition_size(256),
           cost_max_partition_size(8192),
-          cost_target_partition_size(2048),
           cost_breakpoint_threshold(2),
           cost_merge_benefit_threshold(0.05f),
           cost_max_merge_rounds(4),
-          cost_enable_merging(true) {}
+          cost_enable_merging(true),
+          encoder_selector_block_size(256),
+          enable_rle(true) {}
 
     // Default mode (fixed partitions, interleaved-only)
     static VerticalConfig defaultConfig() {
@@ -448,6 +590,48 @@ void globalToInterleaved(int global_idx, int& mini_vector_idx, int& lane_id, int
 __device__ __forceinline__
 int interleavedToGlobal(int mini_vector_idx, int lane_id, int value_idx) {
     return mini_vector_idx * MINI_VECTOR_SIZE + value_idx * LANES_PER_MINI_VECTOR + lane_id;
+}
+
+/**
+ * Load model parameters for a partition (supports both fixed and variable layout)
+ *
+ * @param d_model_params   Parameter array (variable-length or fixed [num_partitions * 4])
+ * @param d_param_offsets  Offset array (nullptr = fixed layout)
+ * @param pid              Partition ID
+ * @param model_type       Model type for this partition
+ * @param delta_bits       Delta bits (used to detect RLE mode)
+ * @param params           Output: loaded parameters [0..3]
+ */
+__device__ __forceinline__
+void loadModelParams(
+    const double* __restrict__ d_model_params,
+    const int64_t* __restrict__ d_param_offsets,
+    int pid,
+    int model_type,
+    int delta_bits,
+    double* params)
+{
+    // Initialize all params to 0
+    params[0] = 0.0;
+    params[1] = 0.0;
+    params[2] = 0.0;
+    params[3] = 0.0;
+
+    if (d_param_offsets == nullptr) {
+        // Fixed layout: pid * 4
+        params[0] = d_model_params[pid * 4];
+        params[1] = d_model_params[pid * 4 + 1];
+        params[2] = d_model_params[pid * 4 + 2];
+        params[3] = d_model_params[pid * 4 + 3];
+    } else {
+        // Variable layout: use offset
+        int64_t base = d_param_offsets[pid];
+        int count = getParamCount(model_type, delta_bits);
+
+        for (int i = 0; i < count; i++) {
+            params[i] = d_model_params[base + i];
+        }
+    }
 }
 
 #endif // L3_Vertical_FORMAT_HPP

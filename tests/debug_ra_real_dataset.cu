@@ -15,7 +15,7 @@
 #include "L3_codec.hpp"
 #include "L3_format.hpp"
 #include "L3_random_access.hpp"
-#include "L3.h"
+#include "L3_opt.h"
 #include "sosd_loader.h"
 #include "encoder_cost_optimal_gpu_merge_v2.cuh"
 
@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
     std::cout << "=== Debug Random Access with Real Dataset ===" << std::endl;
 
     // Use normal dataset (the one that fails in benchmark)
-    std::string filename = "/root/autodl-tmp/test/data/sosd/2-normal_200M_uint64.bin";
+    std::string filename = "data/sosd/2-normal_200M_uint64.bin";
 
     std::cout << "Loading " << filename << "..." << std::endl;
     std::vector<uint64_t> full_data;

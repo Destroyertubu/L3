@@ -17,7 +17,7 @@
 // Format headers
 #include "L3_format.hpp"
 #include "L3_Vertical_format.hpp"
-#include "L3.h"
+#include "L3_opt.h"
 
 // Utils - must come before decompression_kernels.cu
 #include "../src/kernels/utils/bitpack_utils.cuh"
@@ -540,8 +540,8 @@ void testL3Encoder(const std::vector<T>& data) {
 // ============================================================================
 
 int main(int argc, char* argv[]) {
-    std::string data_file = "/root/autodl-tmp/test/data/sosd/2-normal_200M_uint64.bin";
-    std::string output_dir = "/root/autodl-tmp/code/L3/reports/L3/datasets/2-normal";
+    std::string data_file = "data/sosd/2-normal_200M_uint64.bin";
+    std::string output_dir = "reports/L3/datasets/2-normal";
 
     std::cout << "============================================" << std::endl;
     std::cout << "  L3 All Encoders/Decoders Test" << std::endl;

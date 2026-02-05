@@ -5,7 +5,7 @@
  * 1. 固定长度分区 (Fixed-Length) - 现有encoder
  * 2. 变长分区 (Variable-Length) - L32方法
  *
- * 测试数据：/root/autodl-tmp/test/data/fb_200M_uint64.bin
+ * 测试数据：data/fb_200M_uint64.bin
  */
 
 #include <cuda_runtime.h>
@@ -394,7 +394,7 @@ void printComparison(const std::vector<TestResult>& results) {
 }
 
 int main(int argc, char** argv) {
-    const char* default_file = "/root/autodl-tmp/test/data/fb_200M_uint64.bin";
+    const char* default_file = "data/fb_200M_uint64.bin";
     const char* input_file = (argc > 1) ? argv[1] : default_file;
     size_t max_elements = (argc > 2) ? std::stoull(argv[2]) : 0;
 

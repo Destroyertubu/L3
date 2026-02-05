@@ -1,0 +1,84 @@
+{
+   filemgr_checkpoint
+   Memcheck:Param
+   write(buf)
+   ...
+   fun:fseek
+   fun:_ZN14File_Namespace5writeEP8_IO_FILEmmPKa
+   fun:_ZNK14File_Namespace7FileMgr9writeFileEP8_IO_FILEmmPKa
+   fun:_ZN14File_Namespace8FileInfo5writeEmmPKa
+   fun:_ZN14File_Namespace10FileBuffer11writeHeaderERNS_4PageEiib
+   fun:_ZN14File_Namespace10FileBuffer13writeMetadataEi
+   fun:_ZN14File_Namespace7FileMgr17writeDirtyBuffersEv
+}
+{
+   filemgr_checkpoint2
+   Memcheck:Param
+   write(buf)
+   ...
+   fun:fseek
+   fun:_ZN14File_Namespace5writeEP8_IO_FILEmmPKa
+   fun:_ZN14File_Namespace8FileInfo5writeEmmPKa
+   fun:_ZN14File_Namespace10FileBuffer11writeHeaderERNS_4PageEiib
+   fun:_ZN14File_Namespace10FileBuffer13writeMetadataEi
+   fun:_ZN14File_Namespace7FileMgr17writeDirtyBuffersEv
+}
+{
+   go_runtime_cond
+   Memcheck:Cond
+   ...
+   fun:runtime.*
+}
+{
+   go_runtime_addr1
+   Memcheck:Addr1
+   ...
+   fun:runtime.*
+}
+{
+   go_runtime_addr2
+   Memcheck:Addr2
+   ...
+   fun:runtime.*
+}
+{
+   go_runtime_addr4
+   Memcheck:Addr4
+   ...
+   fun:runtime.*
+}
+{
+   go_runtime_addr8
+   Memcheck:Addr8
+   ...
+   fun:runtime.*
+}
+{
+   go_runtime_addr16
+   Memcheck:Addr16
+   ...
+   fun:runtime.*
+}
+{
+   # QE-1008
+   onedal_api_global_common
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:_Znwm
+   ...
+   fun:_GLOBAL__sub_I_common.cpp
+   fun:__libc_csu_init
+   fun:(below main)
+}
+{
+   # QE-1261
+   onedal_api_global_common-GLIBC_2.34
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:_Znwm
+   ...
+   fun:_GLOBAL__sub_I_common.cpp
+   fun:call_init
+   fun:__libc_start_main@@GLIBC_2.34
+   fun:(below main)
+}

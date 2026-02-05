@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
     std::cout << "================================================" << std::endl;
 
     // Default dataset path
-    std::string dataset_path = "/root/autodl-tmp/test/data/sosd/strings/email_leco_30k.txt";
+    std::string dataset_path = "data/sosd/strings/email_leco_30k.txt";
     if (argc > 1) {
         dataset_path = argv[1];
     }

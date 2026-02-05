@@ -16,32 +16,35 @@
 using namespace std;
 //using namespace cub;
 
-#define SF 10
+#define SF 20
 
-#define BASE_PATH "/root/autodl-tmp/code/data/SSB/"
+#define BASE_PATH "/root/autodl-tmp/test/ssb_data/"
+
+// Raw data directory (original uncompressed binary files)
+#define RAW_DATA_DIR BASE_PATH
+// Compressed data directory (tile-gpu compressed files)
+#define COMPRESSED_DIR BASE_PATH "compressed_tilegpu/"
+// DATA_DIR points to compressed data for query execution
+#define DATA_DIR COMPRESSED_DIR
 
 #if SF == 1
-#define DATA_DIR BASE_PATH "s1_columnar/"
 #define LO_LEN 6001171
 #define P_LEN 200000
 #define S_LEN 2000
 #define C_LEN 30000
 #define D_LEN 2556
 #elif SF == 10
-#define DATA_DIR BASE_PATH "L3/ssb_data/"
 #define LO_LEN 119968352
 #define P_LEN 1400000
 #define S_LEN 40000
 #define C_LEN 600000
 #define D_LEN 2556
 #else // 20
-#define DATA_DIR BASE_PATH "s20_columnar/"
-#define LO_LEN 119994368
-//#define LO_LEN 119994746
-#define P_LEN 1000000
-#define S_LEN 40000
-#define C_LEN 600000
-#define D_LEN 2556
+#define LO_LEN 120000000   // 6000000 * 20
+#define P_LEN 1000000      // 200000 * (1 + log2(20)) = 200000 * 5
+#define S_LEN 40000        // 2000 * 20
+#define C_LEN 600000       // 30000 * 20
+#define D_LEN 2557         // 1992-01-01 to 1998-12-31
 #endif
 
 int index_of(string* arr, int len, string val) {
@@ -89,9 +92,11 @@ string lookup(string col_name) {
 template<typename T>
 T* loadColumn(string col_name, int num_entries) {
   T* h_col = new T[num_entries];
-  string filename = DATA_DIR + lookup(col_name);
+  // Load from COMPRESSED_DIR (sorted data for compression/query)
+  string filename = COMPRESSED_DIR + lookup(col_name) + ".bin";
   ifstream colData (filename.c_str(), ios::in | ios::binary);
   if (!colData) {
+    cout << "Failed to open file: " << filename << endl;
     return NULL;
   }
 

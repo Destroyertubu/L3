@@ -62,15 +62,8 @@ void tracePartitionCreation(int data_size, const CostOptimalConfig& config) {
 
         if (seg_len <= 0) continue;
 
-        // Same logic as kernel
-        int part_size = config.target_partition_size;
-        int num_parts = (seg_len + part_size - 1) / part_size;
-        if (num_parts > 0) {
-            part_size = (seg_len + num_parts - 1) / num_parts;
-            part_size = ((part_size + 31) / 32) * 32;  // Align to warp
-            part_size = std::max(config.min_partition_size,
-                                std::min(config.max_partition_size, part_size));
-        }
+        // Start from min_partition_size (warp-aligned)
+        int part_size = ((config.min_partition_size + 31) / 32) * 32;
 
         std::cout << "    -> part_size=" << part_size << ", num_parts=" << num_parts << std::endl;
 
@@ -207,7 +200,6 @@ int main() {
 
     std::cout << "Config:" << std::endl;
     std::cout << "  analysis_block_size: " << config.analysis_block_size << std::endl;
-    std::cout << "  target_partition_size: " << config.target_partition_size << std::endl;
     std::cout << "  min_partition_size: " << config.min_partition_size << std::endl;
     std::cout << "  max_partition_size: " << config.max_partition_size << std::endl;
     std::cout << "  merge_benefit_threshold: " << config.merge_benefit_threshold << std::endl;

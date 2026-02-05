@@ -1,0 +1,5 @@
+2026-01-30T23:26:06.109525 I 2341154 0 0 HeavyDB.cpp:428 HeavyDB shutting down
+2026-01-30T23:26:06.158702 I 2341154 0 0 BufferMgr.cpp:493 Attempting to acquire clearSlabs global lock for GPU_MGR buffer manager on device : 0
+2026-01-30T23:26:06.158821 I 2341154 0 0 BufferMgr.cpp:496 Acquired clearSlabs global lock for GPU_MGR buffer manager on device : 0
+2026-01-30T23:26:06.159260 I 2341154 0 0 BufferMgr.cpp:528 GPU_MGR:0 clear slab memory
+2026-01-30T23:26:06.167456 I 2341154 0 0 BufferMgr.cpp:536 Releasing clearSlabs global lock for GPU_MGR buffer manager on device : 0

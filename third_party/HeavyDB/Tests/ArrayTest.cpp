@@ -1,0 +1,1923 @@
+/*
+ * Copyright 2022 HEAVY.AI, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "TestHelpers.h"
+
+#include <algorithm>
+#include <cctype>
+#include <string>
+#include <vector>
+
+#include "../QueryEngine/Execute.h"
+#include "../QueryRunner/QueryRunner.h"
+
+#ifndef BASE_PATH
+#define BASE_PATH "./tmp"
+#endif
+
+#define SKIP_NO_GPU()                                        \
+  if (skip_tests(dt)) {                                      \
+    CHECK(dt == ExecutorDeviceType::GPU);                    \
+    LOG(WARNING) << "GPU not available, skipping GPU tests"; \
+    continue;                                                \
+  }
+
+// SKIP_NO_GPU() but for parameterized tests which don't use a loop.
+#define SKIP_NO_GPU_P(dt)                                    \
+  if (skip_tests(dt)) {                                      \
+    CHECK_EQ(ExecutorDeviceType::GPU, dt);                   \
+    GTEST_SKIP() << "GPU not available, skipping GPU tests"; \
+  }
+
+bool g_keep_data{false};
+
+extern bool g_is_test_env;
+
+using QR = QueryRunner::QueryRunner;
+using namespace TestHelpers;
+
+inline void run_ddl_statement(const std::string& input_str) {
+  QR::get()->runDDLStatement(input_str);
+}
+
+std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
+                                            const ExecutorDeviceType device_type) {
+  return QR::get()->runSQL(
+      query_str, device_type, /*hoist_literals=*/true, /*allow_loop_joins=*/true);
+}
+
+bool skip_tests(const ExecutorDeviceType device_type) {
+#ifdef HAVE_CUDA
+  return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
+#else
+  return device_type == ExecutorDeviceType::GPU;
+#endif
+}
+
+TargetValue execSQLWithAllowLoopJoin(const std::string& stmt,
+                                     const ExecutorDeviceType dt,
+                                     const bool geo_return_geo_tv = true) {
+  auto rows = QR::get()->runSQL(stmt, dt, true, true);
+  if (geo_return_geo_tv) {
+    rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+  }
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size()) << stmt;
+  return crt_row[0];
+}
+
+const char* array_ext_ops_schema = R"(
+    CREATE TABLE array_ext_ops_test (
+        i64 BIGINT,
+        i32 INT,
+        i16 SMALLINT,
+        i8 TINYINT,
+        d DOUBLE,
+        f FLOAT,
+        i1 BOOLEAN,
+        str TEXT ENCODING DICT(32),
+        arri64 BIGINT[],
+        arri32 INT[],
+        arri16 SMALLINT[],
+        arri8 TINYINT[],
+        arrd DOUBLE[],
+        arrf FLOAT[],
+        arri1 BOOLEAN[],
+        arrstr TEXT[],
+        arrdict TEXT[] ENCODING DICT(32),
+        farri64 BIGINT[2]
+    );
+)";
+
+class ArrayExtOpsEnv : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS array_ext_ops_test;"));
+
+    ASSERT_NO_THROW(run_ddl_statement(array_ext_ops_schema));
+    ValuesGenerator gen("array_ext_ops_test");
+    run_multiple_agg(gen(3,
+                         3,
+                         3,
+                         3,
+                         3,
+                         3,
+                         "'true'",
+                         "'c'",
+                         "{1, 2}",
+                         "{1, 2}",
+                         "{1, 2}",
+                         "{1, 2}",
+                         "{1, 2}",
+                         "{1, 2}",
+                         "{'true', 'false'}",
+                         "{'a', 'b'}",
+                         "{'a', 'b'}",
+                         "{1, 2}"),
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg(gen(1,
+                         1,
+                         1,
+                         1,
+                         1,
+                         1,
+                         "'false'",
+                         "'a'",
+                         "{}",
+                         "{}",
+                         "{}",
+                         "{}",
+                         "{}",
+                         "{}",
+                         "{}",
+                         "{}",
+                         "{}",
+                         "{1, 2}"),
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg(gen(0,
+                         0,
+                         0,
+                         0,
+                         0,
+                         0,
+                         "'false'",
+                         "'a'",
+                         "{-1}",
+                         "{-1}",
+                         "{-1}",
+                         "{-1}",
+                         "{-1}",
+                         "{-1}",
+                         "{'true'}",
+                         "{'z'}",
+                         "{'x', 'y', 'z'}",
+                         "{1, 2}"),
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg(gen(0,
+                         0,
+                         0,
+                         0,
+                         0,
+                         0,
+                         "'false'",
+                         "'a'",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL"),
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg(gen("NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "{4, 5}",
+                         "{4, 5}",
+                         "{4, 5}",
+                         "{4, 5}",
+                         "{4, 5}",
+                         "{4, 5}",
+                         "{'false', 'true'}",
+                         "{'d', 'e'}",
+                         "{'d', 'e'}",
+                         "{4, 5}"),
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg(gen("NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL"),
+                     ExecutorDeviceType::CPU);
+  }
+
+  void TearDown() override {
+    if (!g_keep_data) {
+      ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS array_ext_ops_test;"));
+    }
+  }
+};
+
+TEST_F(ArrayExtOpsEnv, ArrayAppendInteger) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    auto check_row_result = [](const auto& crt_row, const auto& expected) {
+      compare_array(crt_row[0], expected);
+    };
+
+    auto check_entire_integer_result = [&check_row_result](const auto& rows,
+                                                           const int64_t null_sentinel) {
+      ASSERT_EQ(rows->rowCount(), size_t(6));
+
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{1, 2, 3});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{1});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{-1, 0});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{0});
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<int64_t>{4, 5, null_sentinel});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{null_sentinel});
+    };
+
+    // i64
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_append(arri64, i64) FROM array_ext_ops_test;", dt);
+      check_entire_integer_result(rows, inline_int_null_value<int64_t>());
+    }
+
+    // i32
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_append(arri32, i32) FROM array_ext_ops_test;", dt);
+      check_entire_integer_result(rows, inline_int_null_value<int32_t>());
+    }
+
+    // i16
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_append(arri16, i16) FROM array_ext_ops_test;", dt);
+      check_entire_integer_result(rows, inline_int_null_value<int16_t>());
+    }
+
+    // i8
+    {
+      const auto rows =
+          run_multiple_agg("SELECT array_append(arri8, i8) FROM array_ext_ops_test;", dt);
+      check_entire_integer_result(rows, inline_int_null_value<int8_t>());
+    }
+
+    // upcast
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_append(arri64, i8) FROM array_ext_ops_test;", dt);
+      check_entire_integer_result(rows, inline_int_null_value<int64_t>());
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayAppendString) {
+  for (auto dt : {ExecutorDeviceType::CPU, /* ExecutorDeviceType::GPU */}) {
+    SKIP_NO_GPU();
+
+    auto check_row_result = [](const auto& row, const auto& expected) {
+      auto array_tv = boost::get<ArrayTargetValue>(&row);
+      CHECK(array_tv);
+      if (!array_tv->is_initialized()) {
+        ASSERT_EQ(size_t(0), expected.size());
+        return;
+      }
+      const auto& scalar_tv_vector = array_tv->get();
+      ASSERT_EQ(scalar_tv_vector.size(), expected.size());
+      size_t ctr = 0;
+      for (const ScalarTargetValue& scalar_tv : scalar_tv_vector) {
+        auto ns = boost::get<NullableString>(&scalar_tv);
+        CHECK(ns);
+        if (boost::get<std::string>(ns)) {
+          auto str = boost::get<std::string>(ns);
+          ASSERT_TRUE(*str == expected[ctr++]);
+        } else {
+          // null string
+          ASSERT_EQ(expected[ctr++].size(), size_t(0));
+        }
+      }
+    };
+
+    auto check_entire_string_result =
+        [&check_row_result](const auto& rows, const auto& expected_result_set) {
+          ASSERT_EQ(rows->rowCount(), size_t(6));
+
+          for (size_t i = 0; i < expected_result_set.size(); i++) {
+            auto row = rows->getNextRow(true, false)[0];
+            check_row_result(row, expected_result_set[i]);
+          }
+        };
+
+    // TextEncodingDict
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT tarray_append(arrdict, str) from array_ext_ops_test;", dt);
+      std::vector<std::vector<std::string>> expected_result_set{
+          {"a", "b", "c"},
+          {"a"},
+          {"x", "y", "z", "a"},
+          {"a"},
+          {"d", "e", ""},
+          {""},
+      };
+      check_entire_string_result(rows, expected_result_set);
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayAppendBool) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto check_row_result = [](const auto& crt_row, const auto& expected) {
+      compare_array(crt_row[0], expected);
+    };
+
+    auto check_entire_bool_result = [&check_row_result](const auto& rows,
+                                                        const int64_t null_sentinel) {
+      ASSERT_EQ(rows->rowCount(), size_t(6));
+
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<int64_t>{true, false, true});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{false});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{true, false});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{false});
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<int64_t>{false, true, null_sentinel});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{null_sentinel});
+    };
+
+    // bool
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT barray_append(arri1, i1) FROM array_ext_ops_test;", dt);
+      check_entire_bool_result(rows, inline_int_null_value<int8_t>());
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayAppendDouble) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto check_row_result = [](const auto& crt_row, const auto& expected) {
+      compare_array(crt_row[0], expected);
+    };
+    auto check_entire_double_result = [&check_row_result](const auto& rows) {
+      ASSERT_EQ(rows->rowCount(), size_t(6));
+
+      check_row_result(rows->getNextRow(true, true), std::vector<double>{1, 2, 3});
+      check_row_result(rows->getNextRow(true, true), std::vector<double>{1});
+      check_row_result(rows->getNextRow(true, true), std::vector<double>{-1, 0});
+      check_row_result(rows->getNextRow(true, true), std::vector<double>{0});
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<double>{4, 5, inline_fp_null_value<double>()});
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<double>{inline_fp_null_value<double>()});
+    };
+
+    // double
+    {
+      const auto rows =
+          run_multiple_agg("SELECT array_append(arrd, d) FROM array_ext_ops_test;", dt);
+      check_entire_double_result(rows);
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayAppendFloat) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto check_row_result = [](const auto& crt_row, const auto& expected) {
+      compare_array(crt_row[0], expected);
+    };
+    auto check_entire_float_result = [&check_row_result](const auto& rows) {
+      ASSERT_EQ(rows->rowCount(), size_t(6));
+
+      check_row_result(rows->getNextRow(true, true), std::vector<float>{1, 2, 3});
+      check_row_result(rows->getNextRow(true, true), std::vector<float>{1});
+      check_row_result(rows->getNextRow(true, true), std::vector<float>{-1, 0});
+      check_row_result(rows->getNextRow(true, true), std::vector<float>{0});
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<float>{4, 5, inline_fp_null_value<float>()});
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<float>{inline_fp_null_value<float>()});
+    };
+
+    // float
+    {
+      const auto rows =
+          run_multiple_agg("SELECT array_append(arrf, f) FROM array_ext_ops_test;", dt);
+      check_entire_float_result(rows);
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayEqual) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto check_row_result =
+        [](const auto& crt_row, const auto expected, const std::string& msg) {
+          ASSERT_EQ(v<int64_t>(crt_row[0]), expected) << msg;
+        };
+    auto check_first_equal = [&check_row_result](const auto& rows,
+                                                 const std::string& msg) {
+      ASSERT_EQ(rows->rowCount(), size_t(6));
+
+      check_row_result(rows->getNextRow(true, true), 1, msg + ": row 0");
+      check_row_result(rows->getNextRow(true, true), 0, msg + ": row 1");
+      check_row_result(rows->getNextRow(true, true), 0, msg + ": row 2");
+      check_row_result(rows->getNextRow(true, true), 0, msg + ": row 3");
+      check_row_result(rows->getNextRow(true, true), 0, msg + ": row 4");
+      check_row_result(rows->getNextRow(true, true), 0, msg + ": row 5");
+    };
+
+    auto check_all_nonnull_equal = [&check_row_result](const auto& rows,
+                                                       const std::string& msg) {
+      ASSERT_EQ(rows->rowCount(), size_t(6));
+
+      check_row_result(rows->getNextRow(true, true), 1, msg + ": row 0");
+      check_row_result(rows->getNextRow(true, true), 1, msg + ": row 1");
+      check_row_result(rows->getNextRow(true, true), 1, msg + ": row 2");
+      check_row_result(rows->getNextRow(true, true), 0, msg + ": row 3");
+      check_row_result(rows->getNextRow(true, true), 1, msg + ": row 4");
+      check_row_result(rows->getNextRow(true, true), 0, msg + ": row 5");
+    };
+
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arri1, ARRAY[true, false]) FROM array_ext_ops_test;", dt);
+      check_first_equal(rows, "array_equal(arri1, {true, false})");
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arri8, ARRAY[CAST(1 AS TINYINT), CAST(2 AS TINYINT)]) FROM "
+          "array_ext_ops_test;",
+          dt);
+      check_first_equal(rows, "array_equal(arri8, {1, 2})");
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arri16, ARRAY[CAST(1 AS SMALLINT), CAST(2 AS SMALLINT)]) "
+          "FROM array_ext_ops_test;",
+          dt);
+      check_first_equal(rows, "array_equal(arri16, {1, 2})");
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arri32, ARRAY[CAST(1 AS INT), CAST(2 AS INT)]) FROM "
+          "array_ext_ops_test;",
+          dt);
+      check_first_equal(rows, "array_equal(arri32, {1, 2})");
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arri64, ARRAY[CAST(1 AS BIGINT), CAST(2 AS BIGINT)]) FROM "
+          "array_ext_ops_test;",
+          dt);
+      check_first_equal(rows, "array_equal(arri64, {1, 2})");
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arrf, ARRAY[CAST(1 AS FLOAT), CAST(2 AS FLOAT)]) FROM "
+          "array_ext_ops_test;",
+          dt);
+      check_first_equal(rows, "array_equal(arrf, {1, 2})");
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arrd, ARRAY[CAST(1 AS DOUBLE), CAST(2 AS DOUBLE)]) FROM "
+          "array_ext_ops_test;",
+          dt);
+      check_first_equal(rows, "array_equal(arrd, {1, 2})");
+    }
+    if constexpr (false) {  // Requires Array<TextEncodingNone> indexing support
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arrstr, ARRAY['a', 'b']) FROM array_ext_ops_test;", dt);
+      check_first_equal(rows, "array_equal(arrstr, {'a', 'b'})");
+    }
+    if constexpr (false) {  // Requires Array<TextEncodingNone> indexing support
+      const auto rows = run_multiple_agg(
+          "SELECT array_equal(arrdict, ARRAY['a', 'b']) FROM array_ext_ops_test;", dt);
+      check_first_equal(rows, "array_equal(arrdict, {'a', 'b'})");
+    }
+    {
+      std::string cols[] = {"arri1",
+                            "arri8",
+                            "arri16",
+                            "arri32",
+                            "arri64",
+                            "arrf",
+                            "arrd" /*, "arrstr"*/,
+                            "arrdict"};
+      for (const auto& col : cols) {
+        std::string expr = "array_equal(" + col + ", " + col + ")";
+        const auto rows =
+            run_multiple_agg("SELECT " + expr + " FROM array_ext_ops_test;", dt);
+        check_all_nonnull_equal(rows, expr);
+      }
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayAppendDowncast) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    // unsupported downcast
+    {
+      EXPECT_ANY_THROW(run_multiple_agg(
+          "SELECT array_append(arri32, i64) FROM array_ext_ops_test;", dt));
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayValidateRawInputScalarSameType) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_scalar_same_type(arri64) FROM array_ext_ops_test WHERE "
+          "rowid=0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      auto val = v<int64_t>(crt_row[0]);
+      // arri64 on row 0 is {1, 2} so result should be 1 + 2 + 2 = 5
+      ASSERT_EQ(val, static_cast<int64_t>(5));
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayValidateRawInputScalarDiffType) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_scalar_diff_type(arri64) FROM array_ext_ops_test WHERE "
+          "rowid=0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      auto val = v<int64_t>(crt_row[0]);
+      // arri64 on row 0 is {1, 2} so result should be 1 + 2 + 2 = 5
+      ASSERT_EQ(val, static_cast<int32_t>(5));
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayValidateRawInputArraySameType) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {  // varlen array
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_array_same_type(arri64) FROM array_ext_ops_test WHERE "
+          "rowid=0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      // arri64 on row 0 is {1, 2} so result should be {1, 2, 2}
+      auto result = std::vector<int64_t>{1, 2, 2};
+      compare_array(crt_row[0], result);
+    }
+    {  // fixlen array
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_array_same_type(farri64) FROM array_ext_ops_test WHERE "
+          "rowid=0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      // farri64 on row 0 is {1, 2} so result should be {1, 2, 2}
+      auto result = std::vector<int64_t>{1, 2, 2};
+      compare_array(crt_row[0], result);
+    }
+    {  // varlen array literal
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_array_same_type({CAST(1 AS BIGINT), CAST(2 AS BIGINT)});",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      // arri64 on row 0 is {1, 2} so result should be {1, 2, 2}
+      auto result = std::vector<int64_t>{1, 2, 2};
+      compare_array(crt_row[0], result);
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, ArrayValidateRawInputArrayDiffType) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_array_diff_type(arri64) FROM array_ext_ops_test WHERE "
+          "rowid=0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      // arri64 on row 0 is {1, 2} so result should be {1, 2, 2}
+      std::vector<int32_t> result = std::vector<int32_t>{1, 2, 2};
+      compare_array<int32_t>(crt_row[0], result);
+    }
+    {  // fixlen array
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_array_diff_type(farri64) FROM array_ext_ops_test WHERE "
+          "rowid=0;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      // farri64 on row 0 is {1, 2} so result should be {1, 2, 2}
+      auto result = std::vector<int64_t>{1, 2, 2};
+      compare_array(crt_row[0], result);
+    }
+    {  // varlen array literal
+      const auto rows = run_multiple_agg(
+          "SELECT raw_array_as_array_diff_type({CAST(1 AS BIGINT), CAST(2 AS BIGINT)});",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(true, true);
+      // arri64 on row 0 is {1, 2} so result should be {1, 2, 2}
+      auto result = std::vector<int64_t>{1, 2, 2};
+      compare_array(crt_row[0], result);
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, CardinalityWithUdf) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      EXPECT_ANY_THROW(
+          run_multiple_agg("SELECT CARDINALITY(ARRAY_APPEND({1, 2}, 3));", dt));
+    }
+    {
+      EXPECT_ANY_THROW(
+          run_multiple_agg("SELECT ARRAY_LENGTH(ARRAY_APPEND({1, 2}, 3));", dt));
+    }
+  }
+}
+
+TEST_F(ArrayExtOpsEnv, CardinalityForConstantArray) {
+  auto check_row_result =
+      [](const auto& crt_row, int64_t expected, ExecutorDeviceType dt) {
+        auto const res = v<int64_t>(crt_row[0]);
+        ASSERT_EQ(res, expected)
+            << "device: " << dt << ", expected: " << expected << ", but return :" << res;
+      };
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    check_row_result(
+        run_multiple_agg("SELECT CARDINALITY({});", dt)->getNextRow(false, false), 0, dt);
+    check_row_result(
+        run_multiple_agg("SELECT CARDINALITY({1});", dt)->getNextRow(false, false),
+        1,
+        dt);
+    check_row_result(
+        run_multiple_agg("SELECT CARDINALITY({1,2});", dt)->getNextRow(false, false),
+        2,
+        dt);
+  }
+}
+
+class FixedEncodedArrayTest : public ::testing::Test {
+ protected:
+  void SetUp() override { dropTestTables(); }
+
+  void TearDown() override { dropTestTables(); }
+
+ private:
+  void dropTestTables() {
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i64_i32;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i64_i16;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i64_i8;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i32_i8;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i32_i16;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i16_i8;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_dt64_dt32;");
+    run_ddl_statement("DROP TABLE IF EXISTS vfarr_dt64_dt16;");
+    run_ddl_statement("DROP TABLE IF EXISTS farr_dt64_dt32;");
+    run_ddl_statement("DROP TABLE IF EXISTS farr_dt64_dt16;");
+  }
+};
+
+TEST_F(FixedEncodedArrayTest, ExceptionTest) {
+  // Check whether we throw exception for the below cases instead of crashes
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_i64_i32 (val BIGINT[] ENCODING FIXED(32));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_i64_i16 (val BIGINT[] ENCODING FIXED(16));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_i64_i8 (val BIGINT[] ENCODING FIXED(8));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_i32_i8 (val INT[] ENCODING FIXED(16));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_i32_i16 (val INT[] ENCODING FIXED(8));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_i16_i8 (val SMALLINT[] ENCODING FIXED(8));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_dt64_dt32 (val DATE[] ENCODING FIXED(32));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE varr_dt64_dt16 (val DATE[] ENCODING FIXED(16));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE farr_dt64_dt32 (val DATE[1] ENCODING FIXED(32));"));
+  ASSERT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE farr_dt64_dt16 (val DATE[1] ENCODING FIXED(16));"));
+}
+
+class TinyIntArrayImportTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    run_ddl_statement("DROP TABLE IF EXISTS tinyint_arr;");
+    run_ddl_statement("CREATE TABLE tinyint_arr (ti tinyint[]);");
+  }
+
+  void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS tinyint_arr;"); }
+};
+
+TEST_F(TinyIntArrayImportTest, TinyIntImportBugTest) {
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
+                                    ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES (NULL);",
+                                    ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
+                                    ExecutorDeviceType::CPU));
+
+  TearDown();
+  SetUp();
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
+                                    ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES (NULL);",
+                                    ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
+                                    ExecutorDeviceType::CPU));
+
+  TearDown();
+  SetUp();
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
+                                    ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES (NULL);",
+                                    ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(
+      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
+                                    ExecutorDeviceType::CPU));
+}
+
+class MultiFragArrayJoinTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr_n;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr_n;");
+    std::vector<std::string> integer_type_cols{"tiv tinyint[]",
+                                               "tif tinyint[3]",
+                                               "siv smallint[]",
+                                               "sif smallint[3]",
+                                               "intv int[]",
+                                               "intf int[3]",
+                                               "biv bigint[]",
+                                               "bif bigint[3]"};
+    std::vector<std::string> floating_type_cols{"dv double[]",
+                                                "df double[3]",
+                                                "dcv decimal(18,6)[]",
+                                                "dcf decimal(18,6)[3]",
+                                                "fv float[]",
+                                                "ff float[3]"};
+    std::vector<std::string> date_and_time_type_cols{"dtv date[]",
+                                                     "dtf date[3]",
+                                                     "tv time[]",
+                                                     "tf time[3]",
+                                                     "tsv timestamp[]",
+                                                     "tsf timestamp[3]"};
+    std::vector<std::string> text_type_cols{"tx text",
+                                            "txe4 text encoding dict(32)",
+                                            "txe2 text encoding dict(16)",
+                                            "txe1 text encoding dict(8)",
+                                            "txn text encoding none",
+                                            "txv text[]",
+                                            "txve text[] encoding dict (32)"};
+    std::vector<std::string> boolean_type_cols{"boolv boolean[]", "boolf boolean[3]"};
+    auto create_table_ddl_gen = [&integer_type_cols,
+                                 &floating_type_cols,
+                                 &date_and_time_type_cols,
+                                 &text_type_cols,
+                                 &boolean_type_cols](
+                                    const std::string& tbl_name,
+                                    const bool multi_frag,
+                                    const bool has_integer_types = true,
+                                    const bool has_floting_types = true,
+                                    const bool has_date_and_time_types = true,
+                                    const bool has_text_types = true,
+                                    const bool has_boolean_type = true) {
+      std::vector<std::string> cols;
+      if (has_integer_types) {
+        std::copy(
+            integer_type_cols.begin(), integer_type_cols.end(), std::back_inserter(cols));
+      }
+      if (has_floting_types) {
+        std::copy(floating_type_cols.begin(),
+                  floating_type_cols.end(),
+                  std::back_inserter(cols));
+      }
+      if (has_date_and_time_types) {
+        std::copy(date_and_time_type_cols.begin(),
+                  date_and_time_type_cols.end(),
+                  std::back_inserter(cols));
+      }
+      if (has_text_types) {
+        std::copy(text_type_cols.begin(), text_type_cols.end(), std::back_inserter(cols));
+      }
+      if (has_boolean_type) {
+        std::copy(
+            boolean_type_cols.begin(), boolean_type_cols.end(), std::back_inserter(cols));
+      }
+      auto table_cols_ddl = boost::join(cols, ",");
+      auto table_ddl = "(" + table_cols_ddl;
+      std::ostringstream oss;
+      oss << "CREATE TABLE " << tbl_name << table_ddl;
+      if (has_text_types &&
+          (tbl_name.compare("mfarr") == 0 || tbl_name.compare("sfarr") == 0)) {
+        // exclude these cols for multi-frag nullable case to avoid not accepted null
+        // value issue (i.e., RelAlgExecutor::2833)
+        oss << ", txf text[3], txfe text[3] encoding dict (32)";
+      };
+      oss << ")";
+      if (multi_frag) {
+        oss << " WITH (FRAGMENT_SIZE = 5)";
+      }
+      oss << ";";
+      return oss.str();
+    };
+
+    // this test case works on chunk 0 ~ chunk 32 where each chunk contains five rows
+    // and for nullable case, we manipulate how null rows are located in each chunk
+    // here, start_chunk_idx and end_chunk_idx control which null patterns we inserted
+    // into a test table i.e., start_chunk_idx ~ end_chunk_idx --> 0 ~ 2
+    // --> conrresponding table contains three null pattern: 00000, 00001, 000010
+    // where 1's row contains nulled row, i.e., 00010 --> fourth row is null row
+    // if we use frag size to be five, using 2^5 = 32 patterns can test every possible
+    // chunk's row status to see our linearization logic works well under such various
+    // fragments
+    auto insert_dml_gen = [](const std::string& tbl_name,
+                             const bool allow_null,
+                             int start_chunk_idx = 0,
+                             int end_chunk_idx = 32,
+                             const bool has_integer_types = true,
+                             const bool has_floting_types = true,
+                             const bool has_date_and_time_types = true,
+                             const bool has_text_types = true,
+                             const bool has_boolean_type = true) {
+      std::ostringstream oss;
+      oss << "INSERT INTO " << tbl_name << " VALUES(";
+      auto gi = [](const int i) {
+        std::ostringstream oss;
+        if (i % 3 == 1) {
+          oss << "{" << i + 1 << "}";
+        } else if (i % 3 == 2) {
+          oss << "{" << i << "," << i + 2 << "}";
+        } else {
+          oss << "{" << i + 1 << "," << i + 2 << "," << i + 3 << "}";
+        }
+        return oss.str();
+      };
+      auto gf = [](const int i) {
+        std::ostringstream oss;
+        if (i % 3 == 1) {
+          oss << "{" << i << "." << i << "}";
+        } else if (i % 3 == 2) {
+          oss << "{" << i << "." << i << "," << i * 2 << "." << i * 2 << "}";
+        } else {
+          oss << "{" << i + 1 << "." << i + 1 << "," << i + 2 << "." << i + 2 << ","
+              << i + 3 << "." << i + 3 << "}";
+        }
+        return oss.str();
+      };
+      auto gdt = [](const int i) {
+        std::ostringstream oss;
+        if (i % 3 == 1) {
+          oss << "{\'01/01/2021\'}";
+        } else if (i % 3 == 2) {
+          oss << "{\'01/01/2021\',\'01/02/2021\'}";
+        } else {
+          oss << "{\'01/01/2021\',\'01/02/2021\',\'01/03/2021\'}";
+        }
+        return oss.str();
+      };
+      auto gt = [](const int i) {
+        std::ostringstream oss;
+        if (i % 3 == 1) {
+          oss << "{\'01:01:01\'}";
+        } else if (i % 3 == 2) {
+          oss << "{\'01:01:01\',\'01:01:02\'}";
+        } else {
+          oss << "{\'01:01:01\',\'01:01:02\',\'01:01:03\'}";
+        }
+        return oss.str();
+      };
+      auto gts = [](const int i) {
+        std::ostringstream oss;
+        if (i % 3 == 1) {
+          oss << "{\'01/01/2021 01:01:01\'}";
+        } else if (i % 3 == 2) {
+          oss << "{\'01/01/2021 01:01:01\',\'01/01/2021 01:01:02\'}";
+        } else {
+          oss << "{\'01/01/2021 01:01:01\',\'01/01/2021 01:01:02\', \'01/01/2021 "
+                 "01:01:03\'}";
+        }
+        return oss.str();
+      };
+      auto gtx = [](const int i, bool array) {
+        std::ostringstream oss;
+        if (array) {
+          if (i % 3 == 1) {
+            oss << "{\'" << i << "\'}";
+          } else if (i % 3 == 2) {
+            oss << "{\'" << i << "\',\'" << i << i << "\'}";
+          } else {
+            oss << "{\'" << i << "\',\'" << i << i << "\',\'" << i << i << i << "\'}";
+          }
+        } else {
+          if (i % 3 == 1) {
+            oss << "\'" << i << "\'";
+          } else if (i % 3 == 2) {
+            oss << "\'" << i << i << "\'";
+          } else {
+            oss << "\'" << i << i << i << "\'";
+          }
+        }
+        return oss.str();
+      };
+      auto gbool = [](const int i) {
+        std::ostringstream oss;
+        auto bool_val = i % 3 == 0 ? "\'true\'" : "\'false\'";
+        if (i % 3 == 1) {
+          oss << "{" << bool_val << "}";
+        } else if (i % 3 == 2) {
+          oss << "{" << bool_val << "," << bool_val << "}";
+        } else {
+          oss << "{" << bool_val << "," << bool_val << "," << bool_val << "}";
+        }
+        return oss.str();
+      };
+      size_t col_count = 0;
+      if (has_integer_types) {
+        col_count += 8;
+      }
+      if (has_floting_types) {
+        col_count += 6;
+      }
+      if (has_date_and_time_types) {
+        col_count += 6;
+      }
+      if (has_text_types) {
+        col_count += 7;
+      }
+      if (has_boolean_type) {
+        col_count += 2;
+      }
+      if (has_text_types &&
+          (tbl_name.compare("mfarr") == 0 || tbl_name.compare("sfarr") == 0)) {
+        col_count += 2;
+      }
+      std::vector<std::string> null_vec(col_count, "NULL");
+      auto null_str = boost::join(null_vec, ",");
+      auto g = [&tbl_name,
+                &gi,
+                &gf,
+                &gt,
+                &gdt,
+                &gts,
+                &gtx,
+                &gbool,
+                &null_str,
+                &has_integer_types,
+                &has_floting_types,
+                &has_date_and_time_types,
+                &has_text_types,
+                &has_boolean_type](const int i, int null_row) {
+        std::ostringstream oss;
+        std::vector<std::string> col_vals;
+        oss << "INSERT INTO " << tbl_name << " VALUES(";
+        if (null_row) {
+          oss << null_str;
+        } else {
+          if (has_integer_types) {
+            col_vals.push_back(gi(i % 120));
+            col_vals.push_back(gi(3));
+            col_vals.push_back(gi(i));
+            col_vals.push_back(gi(3));
+            col_vals.push_back(gi(i));
+            col_vals.push_back(gi(3));
+            col_vals.push_back(gi(i));
+            col_vals.push_back(gi(3));
+          }
+          if (has_floting_types) {
+            col_vals.push_back(gf(i));
+            col_vals.push_back(gf(3));
+            col_vals.push_back(gf(i));
+            col_vals.push_back(gf(3));
+            col_vals.push_back(gf(i));
+            col_vals.push_back(gf(3));
+          }
+          if (has_date_and_time_types) {
+            col_vals.push_back(gdt(i));
+            col_vals.push_back(gdt(3));
+            col_vals.push_back(gt(i));
+            col_vals.push_back(gt(3));
+            col_vals.push_back(gts(i));
+            col_vals.push_back(gts(3));
+          }
+          if (has_text_types) {
+            col_vals.push_back(gtx(i, false));
+            col_vals.push_back(gtx(i, false));
+            col_vals.push_back(gtx(i, false));
+            col_vals.push_back(gtx(i, false));
+            col_vals.push_back(gtx(i, false));
+            col_vals.push_back(gtx(i, true));
+            col_vals.push_back(gtx(i, true));
+          }
+          if (has_boolean_type) {
+            col_vals.push_back(gbool(i));
+            col_vals.push_back(gbool(3));
+          }
+          if (has_text_types &&
+              (tbl_name.compare("mfarr") == 0 || tbl_name.compare("sfarr") == 0)) {
+            col_vals.push_back(gtx(3, true));
+            col_vals.push_back(gtx(3, true));
+          }
+        }
+        oss << boost::join(col_vals, ",");
+        oss << ");";
+        return oss.str();
+      };
+      std::vector<std::string> insert_dml_vec;
+      if (allow_null) {
+        int i = 1;
+        for (int chunk_idx = start_chunk_idx; chunk_idx < end_chunk_idx; chunk_idx++) {
+          std::string str = std::bitset<5>(chunk_idx).to_string();
+          for (int row_idx = 0; row_idx < 5; row_idx++, i++) {
+            bool null_row = str.at(row_idx) == '1';
+            if (null_row) {
+              insert_dml_vec.push_back(g(0, true));
+            } else {
+              insert_dml_vec.push_back(g(i, false));
+            }
+          }
+        }
+      } else {
+        for (auto chunk_idx = start_chunk_idx; chunk_idx < end_chunk_idx; chunk_idx++) {
+          for (auto row_idx = 0; row_idx < 5; row_idx++) {
+            auto i = (chunk_idx * 5) + row_idx;
+            insert_dml_vec.push_back(g(i, false));
+          }
+        }
+      }
+      for (auto& dml : insert_dml_vec) {
+        QR::get()->runSQL(dml, ExecutorDeviceType::CPU);
+      }
+      col_count = 0;
+    };
+    QR::get()->runDDLStatement(create_table_ddl_gen("sfarr", false));
+    QR::get()->runDDLStatement(create_table_ddl_gen("mfarr", true));
+    QR::get()->runDDLStatement(create_table_ddl_gen("sfarr_n", false));
+    QR::get()->runDDLStatement(create_table_ddl_gen("mfarr_n", true));
+
+    insert_dml_gen("sfarr", false);
+    insert_dml_gen("mfarr", false);
+    insert_dml_gen("sfarr_n", true);
+    insert_dml_gen("mfarr_n", true);
+  }
+
+  void TearDown() override {
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr_n;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr_n;");
+  }
+};
+
+TEST_F(MultiFragArrayJoinTest, IndexedArrayJoin) {
+  // 1. non-nullable array
+  {
+    std::vector<std::string> integer_types{
+        "tiv", "tif", "siv", "sif", "intv", "intf", "biv", "bif"};
+    std::vector<std::string> float_types{"dv", "df", "dcv", "dcf", "fv", "ff"};
+    std::vector<std::string> date_types{"dtv", "dtf"};
+    std::vector<std::string> time_types{"tv", "tf"};
+    std::vector<std::string> timestamp_types{"tsv", "tsf"};
+    std::vector<std::string> non_encoded_text_types{"tx", "txe4", "txe2", "txe1", "txn"};
+    std::vector<std::string> text_array_types{"txv", "txve", "txf", "txfe"};
+    std::vector<std::string> bool_types{"boolf", "boolv"};
+    auto run_tests = [](const std::vector<std::string> col_types) {
+      for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+        SKIP_NO_GPU();
+        for (const auto& col_name : col_types) {
+          std::ostringstream sq, q1;
+          auto join_cond = "s." + col_name + "[1] = r." + col_name + "[1];";
+          if (col_name.compare("tx") == 0 || col_name.compare("txe4") == 0 ||
+              col_name.compare("txe2") == 0 || col_name.compare("txe1") == 0 ||
+              col_name.compare("txn") == 0) {
+            join_cond = "s." + col_name + " = r." + col_name + ";";
+          }
+          sq << "SELECT COUNT(1) FROM sfarr s, sfarr r WHERE " << join_cond;
+          q1 << "SELECT COUNT(1) FROM mfarr r, mfarr s WHERE " << join_cond;
+          auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
+          auto res1 = v<int64_t>(execSQLWithAllowLoopJoin(q1.str(), dt));
+          ASSERT_EQ(single_frag_res, res1) << q1.str();
+        }
+      }
+    };
+    run_tests(integer_types);
+    run_tests(float_types);
+    run_tests(date_types);
+    run_tests(time_types);
+    run_tests(timestamp_types);
+    run_tests(non_encoded_text_types);
+    run_tests(text_array_types);
+    run_tests(bool_types);
+  }
+
+  // 2. nullable array
+  {
+    std::vector<std::string> integer_types{
+        "tiv", "tif", "siv", "sif", "intv", "intf", "biv", "bif"};
+    std::vector<std::string> float_types{"dv", "df", "dcv", "dcf", "fv", "ff"};
+    std::vector<std::string> date_types{"dtv", "dtf"};
+    std::vector<std::string> time_types{"tv", "tf"};
+    std::vector<std::string> timestamp_types{"tsv", "tsf"};
+    std::vector<std::string> non_encoded_text_types{"tx", "txe4", "txe2", "txe1", "txn"};
+    std::vector<std::string> text_array_types{
+        "txv", "txve"};  // skip txf text[3] / txfe text[3] encoding dict (32)
+    std::vector<std::string> bool_types{"boolf", "boolv"};
+    auto run_tests = [](const std::vector<std::string> col_types) {
+      for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+        SKIP_NO_GPU();
+        for (const auto& col_name : col_types) {
+          std::ostringstream sq, q1;
+          auto join_cond = "s." + col_name + "[1] = r." + col_name + "[1];";
+          if (col_name.compare("tx") == 0 || col_name.compare("txe4") == 0 ||
+              col_name.compare("txe2") == 0 || col_name.compare("txe1") == 0 ||
+              col_name.compare("txn") == 0) {
+            join_cond = "s." + col_name + " = r." + col_name + ";";
+          }
+          sq << "SELECT COUNT(1) FROM sfarr_n s, sfarr_n r WHERE " << join_cond;
+          q1 << "SELECT COUNT(1) FROM mfarr_n r, mfarr_n s WHERE " << join_cond;
+          auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
+          auto res1 = v<int64_t>(execSQLWithAllowLoopJoin(q1.str(), dt));
+          ASSERT_EQ(single_frag_res, res1) << q1.str();
+        }
+      }
+    };
+    run_tests(integer_types);
+    run_tests(float_types);
+    run_tests(date_types);
+    run_tests(time_types);
+    run_tests(timestamp_types);
+    run_tests(non_encoded_text_types);
+    run_tests(text_array_types);
+    run_tests(bool_types);
+  }
+}
+
+class MultiFragArrayParallelLinearizationTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr_n;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr_n;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr_n2;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr_n2;");
+    g_enable_parallel_linearization = 10;
+
+    std::vector<std::string> cols{"tiv tinyint[]",
+                                  "siv smallint[]",
+                                  "intv int[]",
+                                  "biv bigint[]",
+                                  "dv double[]",
+                                  "dcv decimal(18,6)[]",
+                                  "fv float[]",
+                                  "dtv date[]",
+                                  "tv time[]",
+                                  "tsv timestamp[]",
+                                  "txv text[]",
+                                  "txve text[] encoding dict (32)",
+                                  "boolv boolean[]"};
+    auto table_cols_ddl = boost::join(cols, ",");
+    auto create_table_ddl_gen = [&table_cols_ddl](const std::string& tbl_name,
+                                                  const bool multi_frag) {
+      auto table_ddl = "(" + table_cols_ddl;
+      std::ostringstream oss;
+      oss << "CREATE TABLE " << tbl_name << table_ddl << ")";
+      if (multi_frag) {
+        oss << " WITH (FRAGMENT_SIZE = 5)";
+      }
+      oss << ";";
+      return oss.str();
+    };
+
+    QR::get()->runDDLStatement(create_table_ddl_gen("sfarr", false));
+    QR::get()->runDDLStatement(create_table_ddl_gen("mfarr", true));
+    QR::get()->runDDLStatement(create_table_ddl_gen("sfarr_n", false));
+    QR::get()->runDDLStatement(create_table_ddl_gen("mfarr_n", true));
+    QR::get()->runDDLStatement(create_table_ddl_gen("sfarr_n2", false));
+    QR::get()->runDDLStatement(create_table_ddl_gen("mfarr_n2", true));
+
+    auto insert_table = [](const std::string& tbl_name,
+                           int num_tuples,
+                           int frag_size,
+                           bool allow_null,
+                           bool first_frag_row_null) {
+      std::ostringstream oss;
+      oss << "INSERT INTO " << tbl_name << " VALUES(";
+      auto gi = [](const int i) {
+        std::ostringstream oss;
+        if (i % 3 == 1) {
+          oss << "{" << i + 1 << "}";
+        } else if (i % 3 == 2) {
+          oss << "{" << i << "," << i + 2 << "}";
+        } else {
+          oss << "{" << i + 1 << "," << i + 2 << "," << i + 3 << "}";
+        }
+        return oss.str();
+      };
+      auto gf = [](const int i) {
+        std::ostringstream oss;
+        if (i % 3 == 1) {
+          oss << "{" << i << "." << i << "}";
+        } else if (i % 3 == 2) {
+          oss << "{" << i << "." << i << "," << i * 2 << "." << i * 2 << "}";
+        } else {
+          oss << "{" << i + 1 << "." << i + 1 << "," << i + 2 << "." << i + 2 << ","
+              << i + 3 << "." << i + 3 << "}";
+        }
+        return oss.str();
+      };
+      auto gdt = [](const int i) {
+        std::ostringstream oss;
+        if (i % 3 == 1) {
+          oss << "{\'01/01/2021\'}";
+        } else if (i % 3 == 2) {
+          oss << "{\'01/01/2021\',\'01/02/2021\'}";
+        } else {
+          oss << "{\'01/01/2021\',\'01/02/2021\',\'01/03/2021\'}";
+        }
+        return oss.str();
+      };
+      auto gt = [](const int i) {
+        std::ostringstream oss;
+        if (i % 3 == 1) {
+          oss << "{\'01:01:01\'}";
+        } else if (i % 3 == 2) {
+          oss << "{\'01:01:01\',\'01:01:02\'}";
+        } else {
+          oss << "{\'01:01:01\',\'01:01:02\',\'01:01:03\'}";
+        }
+        return oss.str();
+      };
+      auto gts = [](const int i) {
+        std::ostringstream oss;
+        if (i % 3 == 1) {
+          oss << "{\'01/01/2021 01:01:01\'}";
+        } else if (i % 3 == 2) {
+          oss << "{\'01/01/2021 01:01:01\',\'01/01/2021 01:01:02\'}";
+        } else {
+          oss << "{\'01/01/2021 01:01:01\',\'01/01/2021 01:01:02\', \'01/01/2021 "
+                 "01:01:03\'}";
+        }
+        return oss.str();
+      };
+      auto gtx = [](const int i) {
+        std::ostringstream oss;
+        if (i % 3 == 1) {
+          oss << "{\'" << i << "\'}";
+        } else if (i % 3 == 2) {
+          oss << "{\'" << i << "\',\'" << i << i << "\'}";
+        } else {
+          oss << "{\'" << i << "\',\'" << i << i << "\',\'" << i << i << i << "\'}";
+        }
+        return oss.str();
+      };
+      auto gbool = [](const int i) {
+        std::ostringstream oss;
+        auto bool_val = i % 3 == 0 ? "\'true\'" : "\'false\'";
+        if (i % 3 == 1) {
+          oss << "{" << bool_val << "}";
+        } else if (i % 3 == 2) {
+          oss << "{" << bool_val << "," << bool_val << "}";
+        } else {
+          oss << "{" << bool_val << "," << bool_val << "," << bool_val << "}";
+        }
+        return oss.str();
+      };
+      size_t col_count = 13;
+      std::vector<std::string> null_vec(col_count, "NULL");
+      auto null_str = boost::join(null_vec, ",");
+      auto g = [&tbl_name, &null_str, &gi, &gf, &gt, &gdt, &gts, &gtx, &gbool](
+                   const int i, int null_row) {
+        std::ostringstream oss;
+        std::vector<std::string> col_vals;
+        oss << "INSERT INTO " << tbl_name << " VALUES(";
+        if (null_row) {
+          oss << null_str;
+        } else {
+          auto i_r = gi(i);
+          auto i_f = gf(i);
+          auto i_tx = gtx(i);
+          col_vals.push_back(gi(i % 120));
+          col_vals.push_back(i_r);
+          col_vals.push_back(i_r);
+          col_vals.push_back(i_r);
+          col_vals.push_back(i_f);
+          col_vals.push_back(i_f);
+          col_vals.push_back(i_f);
+          col_vals.push_back(gdt(i));
+          col_vals.push_back(gt(i));
+          col_vals.push_back(gts(i));
+          col_vals.push_back(i_tx);
+          col_vals.push_back(i_tx);
+          col_vals.push_back(gbool(i));
+        }
+        oss << boost::join(col_vals, ",");
+        oss << ");";
+        return oss.str();
+      };
+      std::vector<std::string> insert_dml_vec;
+      if (allow_null) {
+        for (int i = 0; i < num_tuples; i++) {
+          if ((first_frag_row_null && (i % frag_size) == 0) || (i % 17 == 5)) {
+            insert_dml_vec.push_back(g(0, true));
+          } else {
+            insert_dml_vec.push_back(g(i, false));
+          }
+        }
+      } else {
+        for (int i = 0; i < num_tuples; i++) {
+          insert_dml_vec.push_back(g(i, false));
+        }
+      }
+
+      for (auto& dml : insert_dml_vec) {
+        QR::get()->runSQL(dml, ExecutorDeviceType::CPU);
+      }
+    };
+
+    insert_table("sfarr", 300, 100, false, false);
+    insert_table("mfarr", 300, 100, false, false);
+    insert_table("sfarr_n", 300, 100, true, true);
+    insert_table("mfarr_n", 300, 100, true, true);
+    insert_table("sfarr_n2", 300, 100, true, false);
+    insert_table("mfarr_n2", 300, 100, true, false);
+  }
+
+  void TearDown() override {
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr_n;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr_n;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr_n2;");
+    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr_n2;");
+    g_enable_parallel_linearization = 20000;
+  }
+};
+
+TEST_F(MultiFragArrayParallelLinearizationTest, IndexedArrayJoin) {
+  std::vector<std::string> integer_types{"tiv", "siv", "intv", "biv"};
+  std::vector<std::string> float_types{"dv", "dcv", "fv"};
+  std::vector<std::string> date_types{"dtv"};
+  std::vector<std::string> time_types{"tv"};
+  std::vector<std::string> timestamp_types{"tsv"};
+  std::vector<std::string> text_array_types{"txv", "txve"};
+  std::vector<std::string> bool_types{"boolv"};
+
+  // case 1. non_null
+  {
+    auto run_tests = [](const std::vector<std::string> col_types) {
+      for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+        SKIP_NO_GPU();
+        for (const auto& col_name : col_types) {
+          std::ostringstream sq, q1;
+          auto join_cond = "s." + col_name + "[1] = r." + col_name + "[1];";
+          sq << "SELECT COUNT(1) FROM sfarr s, sfarr r WHERE " << join_cond;
+          q1 << "SELECT COUNT(1) FROM mfarr r, mfarr s WHERE " << join_cond;
+          auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
+          auto res1 = v<int64_t>(execSQLWithAllowLoopJoin(q1.str(), dt));
+          ASSERT_EQ(single_frag_res, res1) << q1.str();
+        }
+      }
+    };
+    run_tests(integer_types);
+    run_tests(float_types);
+    run_tests(date_types);
+    run_tests(time_types);
+    run_tests(timestamp_types);
+    run_tests(text_array_types);
+    run_tests(bool_types);
+  }
+
+  // case 2-a. nullable having first row of each frag is null row
+  {
+    auto run_tests = [](const std::vector<std::string> col_types) {
+      for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+        SKIP_NO_GPU();
+        for (const auto& col_name : col_types) {
+          std::ostringstream sq, q1;
+          auto join_cond = "s." + col_name + "[1] = r." + col_name + "[1];";
+          sq << "SELECT COUNT(1) FROM sfarr_n s, sfarr_n r WHERE " << join_cond;
+          q1 << "SELECT COUNT(1) FROM mfarr_n r, mfarr_n s WHERE " << join_cond;
+          auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
+          auto res1 = v<int64_t>(execSQLWithAllowLoopJoin(q1.str(), dt));
+          ASSERT_EQ(single_frag_res, res1) << q1.str();
+        }
+      }
+    };
+    run_tests(integer_types);
+    run_tests(float_types);
+    run_tests(date_types);
+    run_tests(time_types);
+    run_tests(timestamp_types);
+    run_tests(text_array_types);
+    run_tests(bool_types);
+  }
+
+  // case 2-b. nullable having first row of each frag is non-null row
+  {
+    auto run_tests = [](const std::vector<std::string> col_types) {
+      for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+        SKIP_NO_GPU();
+        for (const auto& col_name : col_types) {
+          std::ostringstream sq, q1;
+          auto join_cond = "s." + col_name + "[1] = r." + col_name + "[1];";
+          sq << "SELECT COUNT(1) FROM sfarr_n2 s, sfarr_n2 r WHERE " << join_cond;
+          q1 << "SELECT COUNT(1) FROM mfarr_n2 r, mfarr_n2 s WHERE " << join_cond;
+          auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
+          auto res1 = v<int64_t>(execSQLWithAllowLoopJoin(q1.str(), dt));
+          ASSERT_EQ(single_frag_res, res1) << q1.str();
+        }
+      }
+    };
+    run_tests(integer_types);
+    run_tests(float_types);
+    run_tests(date_types);
+    run_tests(time_types);
+    run_tests(timestamp_types);
+    run_tests(text_array_types);
+    run_tests(bool_types);
+  }
+}
+
+class ArrayConditionalExpressionTest : public ExecutorDeviceParameterizedTest {
+ public:
+  static void SetUpTestSuite() {
+    run_ddl_statement(
+        "CREATE TABLE array_test (id INTEGER, i1 INTEGER[], i2 INTEGER[]);");
+    run_multiple_agg(
+        "INSERT INTO array_test VALUES (1, {1, 2, 3}, NULL), (1, NULL, {4, 5, 6}), (1, "
+        "{1, 2}, {3, 4});",
+        ExecutorDeviceType::CPU);
+  }
+
+  static void TearDownTestSuite() {
+    if (!g_keep_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS array_test;");
+    }
+  }
+
+  void queryAndAssertArrayExprError(const std::string& query) {
+    try {
+      run_multiple_agg(query, device_type_);
+      FAIL() << "An exception should have been thrown for this test case";
+    } catch (const std::exception& e) {
+      ASSERT_STREQ(
+          "Array column projections are currently not supported in conditional "
+          "expressions.",
+          e.what());
+    }
+  }
+
+  bool gpusPresent() override { return QR::get()->gpusPresent(); }
+};
+
+TEST_P(ArrayConditionalExpressionTest, Coalesce) {
+  queryAndAssertArrayExprError("SELECT coalesce(i1, i2) FROM array_test;");
+}
+
+TEST_P(ArrayConditionalExpressionTest, CaseExpr) {
+  queryAndAssertArrayExprError(
+      "SELECT CASE WHEN MOD(id, 2) = 1 THEN i1 ELSE i2 END FROM array_test;");
+}
+
+TEST_P(ArrayConditionalExpressionTest, CaseExprNullWhenCondition) {
+  queryAndAssertArrayExprError(
+      "SELECT CASE WHEN MOD(id, 2) = 1 THEN NULL ELSE i2 END FROM array_test;");
+}
+
+TEST_P(ArrayConditionalExpressionTest, CaseExprNullElseCondition) {
+  queryAndAssertArrayExprError(
+      "SELECT CASE WHEN MOD(id, 2) = 1 THEN i1 ELSE NULL END FROM array_test;");
+}
+
+TEST_P(ArrayConditionalExpressionTest, CaseExprNullBetweenThenAndElseCondition) {
+  queryAndAssertArrayExprError(
+      "SELECT CASE WHEN MOD(id, 2) = 1 THEN i1 WHEN id = 1 THEN NULL ELSE i2 END FROM "
+      "array_test;");
+}
+
+INSTANTIATE_TEST_SUITE_P(CpuAndGpuExecutorDevices,
+                         ArrayConditionalExpressionTest,
+                         ::testing::Values(ExecutorDeviceType::CPU,
+                                           ExecutorDeviceType::GPU),
+                         ::testing::PrintToStringParamName());
+
+TEST(Select, LiteralDecimals) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    // Verify decimal values of different precision and scale
+    // can be cast to a common type when in the same array.
+    char const* query = "SELECT {1.0, 10.00};";
+    EXPECT_NO_THROW(run_multiple_agg(query, dt)) << query << ' ' << dt;
+
+    // When decimals in the same array cannot be cast to a common decimal type
+    // because the precision would be too large then they are cast to double.
+    query =
+        "SELECT array_equal({POWER(2.0,59), POWER(2.0,-20)},"
+        " {576460752303423488.0, 0.00000095367431640625});";
+    auto const result_set = run_multiple_agg(query, dt);
+    constexpr bool translate_strings = true;
+    constexpr bool decimal_to_double = true;
+    auto const result = result_set->getNextRow(translate_strings, decimal_to_double)[0];
+    EXPECT_TRUE(v<int64_t>(result)) << query << ' ' << dt;
+  }
+}
+
+struct ArrayDotProductParam {
+  char v_type;  // i,f,d for in64_t,float,double as parameter to v<>().
+  std::optional<double> expected;
+  char const* lhs;
+  char const* rhs;
+};
+
+using ArrayDotProductTuple = std::tuple<ExecutorDeviceType, ArrayDotProductParam>;
+
+class ArrayDotProductTest : public testing::TestWithParam<ArrayDotProductTuple> {
+ public:
+  static void SetUpTestSuite() {
+    run_ddl_statement("DROP TABLE IF EXISTS dot_product_test;");
+    run_ddl_statement(
+        "CREATE TABLE dot_product_test (id INTEGER, i8val TINYINT, i16val SMALLINT,"
+        " i32val INT, i64val BIGINT, f32val FLOAT, f64val DOUBLE, i8 TINYINT[3],"
+        " i16 SMALLINT[3], i32 INTEGER[3], i64 BIGINT[3], f32 FLOAT[3], f64 DOUBLE[3],"
+        " d18 DECIMAL(18,9)[3], i8null TINYINT[3], i16null SMALLINT[3],"
+        " i32null INTEGER[3], i64null BIGINT[3], f32null FLOAT[3], f64null DOUBLE[3],"
+        " d18null DECIMAL(18,9)[3]);");
+    run_multiple_agg(
+        "INSERT INTO dot_product_test VALUES (0, 8, 16, 32, 64, 32.0, 64.0, {1, 2, 3},"
+        " {1, 2, 3}, {1, 2, 3}, {1, 2, 3}, {1., 2., 3.}, {1., 2., 3.}, {1., 2., 3.},"
+        " NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
+        ExecutorDeviceType::CPU);
+    run_multiple_agg(
+        "INSERT INTO dot_product_test VALUES (1, 8, 16, 32, 64, 32.0, 64.0, {1, 2, 3},"
+        " {1, 2, 3}, {1, 2, 3}, {1, 2, 3}, {1., 2., 3.}, {1., 2., 3.}, {1., 2., 3.},"
+        " NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
+        ExecutorDeviceType::CPU);
+    run_multiple_agg(
+        "INSERT INTO dot_product_test VALUES (2, 8, 16, 32, 64, 32.0, 64.0, {1, 2, 3},"
+        " {1, 2, 3}, {1, 2, 3}, {1, 2, 3}, {1., 2., 3.}, {1., 2., 3.}, {1., 2., 3.},"
+        " NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
+        ExecutorDeviceType::CPU);
+    run_multiple_agg(
+        "INSERT INTO dot_product_test VALUES (3, 8, 16, 32, 64, 32.0, 64.0, {1, 2, 3},"
+        " {1, 2, 3}, {1, 2, 3}, {1, 2, 3}, {1., 2., 3.}, {1., 2., 3.}, {1., 2., 3.},"
+        " NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
+        ExecutorDeviceType::CPU);
+    run_multiple_agg(
+        "INSERT INTO dot_product_test VALUES (4, 8, 16, 32, 64, 32.0, 64.0, {1, 2, 3},"
+        " {1, 2, 3}, {1, 2, 3}, {1, 2, 3}, {1., 2., 3.}, {1., 2., 3.}, {1., 2., 3.},"
+        " NULL, NULL, NULL, NULL, NULL, NULL, NULL);",
+        ExecutorDeviceType::CPU);
+  }
+
+  static void TearDownTestSuite() {
+    if (!g_keep_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS dot_product_test;");
+    }
+  }
+
+  static std::string printTestParams(
+      const ::testing::TestParamInfo<ArrayDotProductTuple>& info) {
+    auto const [dt, param] = info.param;
+    std::ostringstream ss;
+    ss << dt << '_' << param.lhs << '_' << param.rhs;
+    std::string str = ss.str();
+    std::replace(str.begin(), str.end(), '-', 'm');  // 'm' means "minus"
+    std::replace(str.begin(), str.end(), '.', 'p');  // 'p' means "point"
+    // Erase {}s.
+    str.erase(std::remove(str.begin(), str.end(), '{'), str.end());
+    str.erase(std::remove(str.begin(), str.end(), '}'), str.end());
+    // Replace all remaining consecutive non-alphanums with a single underscore.
+    replace_consecutive_non_alphaum(str, '_');
+    return str;
+  }
+};
+
+TEST_P(ArrayDotProductTest, BasicDotProduct) {
+  auto const [dt, param] = GetParam();
+  SKIP_NO_GPU_P(dt);
+  std::ostringstream query;
+  query << "SELECT DOT_PRODUCT(" << param.lhs << ',' << param.rhs << ") "
+        << (param.expected ? "" : "IS NULL ") << "FROM dot_product_test WHERE id=0";
+  auto const result_set = run_multiple_agg(query.str(), dt);
+  ASSERT_EQ(1u, result_set->rowCount()) << query.str();
+  constexpr bool translate_strings = true;
+  constexpr bool decimal_to_double = true;
+  auto const actual = result_set->getNextRow(translate_strings, decimal_to_double)[0];
+  if (param.expected) {
+    constexpr double EPS = 1e-13;
+    double const err = EPS * std::fabs(*param.expected);
+    switch (param.v_type) {
+      case 'i':
+        ASSERT_EQ(int64_t(*param.expected), v<int64_t>(actual)) << query.str();
+        break;
+      case 'f':
+        ASSERT_NEAR(*param.expected, v<float>(actual), err) << query.str();
+        break;
+      case 'd':
+        ASSERT_NEAR(*param.expected, v<double>(actual), err) << query.str();
+        break;
+      default:
+        UNREACHABLE() << param.v_type;
+    }
+  } else {
+    bool const is_null = static_cast<bool>(v<int64_t>(actual));
+    ASSERT_TRUE(is_null) << query.str();
+  }
+}
+
+// Test DOT_PRODUCT() between different array types.
+INSTANTIATE_TEST_SUITE_P(
+    BasicValues,
+    ArrayDotProductTest,
+    testing::Combine(
+        testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+        testing::Values(ArrayDotProductParam{'i', 14, "i8", "i8"},
+                        ArrayDotProductParam{'i', 14, "i8", "i16"},
+                        ArrayDotProductParam{'i', 14, "i8", "i32"},
+                        ArrayDotProductParam{'i', 14, "i8", "i64"},
+                        ArrayDotProductParam{'f', 14, "i8", "f32"},
+                        ArrayDotProductParam{'d', 14, "i8", "f64"},
+                        ArrayDotProductParam{'i', 14, "i16", "i16"},
+                        ArrayDotProductParam{'i', 14, "i16", "i32"},
+                        ArrayDotProductParam{'i', 14, "i16", "i64"},
+                        ArrayDotProductParam{'f', 14, "i16", "f32"},
+                        ArrayDotProductParam{'d', 14, "i16", "f64"},
+                        ArrayDotProductParam{'i', 14, "i32", "i32"},
+                        ArrayDotProductParam{'i', 14, "i32", "i64"},
+                        ArrayDotProductParam{'d', 14, "i32", "f32"},
+                        ArrayDotProductParam{'d', 14, "i32", "f64"},
+                        ArrayDotProductParam{'i', 14, "i64", "i64"},
+                        ArrayDotProductParam{'d', 14, "i64", "f32"},
+                        ArrayDotProductParam{'d', 14, "i64", "f64"},
+                        ArrayDotProductParam{'f', 14, "f32", "f32"},
+                        ArrayDotProductParam{'d', 14, "f32", "f64"},
+                        ArrayDotProductParam{'d', 14, "f64", "f64"},
+                        ArrayDotProductParam{'i', 14, "i8", "{1,2,3}"},
+                        ArrayDotProductParam{'i', 14, "i16", "{1,2,3}"},
+                        ArrayDotProductParam{'i', 14, "i32", "{1,2,3}"},
+                        ArrayDotProductParam{'i', 14, "i64", "{1,2,3}"},
+                        ArrayDotProductParam{'d', 14, "f32", "{1,2,3}"},
+                        ArrayDotProductParam{'d', 14, "f64", "{1,2,3}"},
+                        ArrayDotProductParam{'d', 74, "f64", "{1,i32val,3}"},
+                        ArrayDotProductParam{'f', 14, "i8", "{1.0,2.0,3.0}"},
+                        ArrayDotProductParam{'f', 14, "i16", "{1.0,2.0,3.0}"},
+                        ArrayDotProductParam{'d', 14, "i32", "{1.0,2.0,3.0}"},
+                        ArrayDotProductParam{'d', 14, "i64", "{1.0,2.0,3.0}"},
+                        ArrayDotProductParam{'f', 14, "f32", "{1.0,2.0,3.0}"},
+                        ArrayDotProductParam{'d', 14, "f64", "{1.0,2.0,3.0}"},
+                        ArrayDotProductParam{'d', 14, "i8", "{1.0,20e-1,3.0}"},
+                        ArrayDotProductParam{'d', 14, "i16", "{1.0,20e-1,3.0}"},
+                        ArrayDotProductParam{'d', 14, "i32", "{1.0,20e-1,3.0}"},
+                        ArrayDotProductParam{'d', 14, "i64", "{1.0,20e-1,3.0}"},
+                        ArrayDotProductParam{'d', 14, "f32", "{1.0,20e-1,3.0}"},
+                        ArrayDotProductParam{'d', 14, "f64", "{1.0,20e-1,3.0}"},
+                        ArrayDotProductParam{'i', {}, "i8", "{1,2}"},
+                        ArrayDotProductParam{'i', {}, "i16", "{1,2,3,4}"},
+                        ArrayDotProductParam{'i', {}, "i32", "{1,2}"},
+                        ArrayDotProductParam{'i', {}, "i64", "{1,2,3,4}"},
+                        ArrayDotProductParam{'d', {}, "f32", "{1,2}"},
+                        ArrayDotProductParam{'d', {}, "f64", "{1,2,3,4}"},
+                        ArrayDotProductParam{'i', {}, "i8null", "{1,2,3}"},
+                        ArrayDotProductParam{'i', {}, "i16null", "{1,2,3}"},
+                        ArrayDotProductParam{'i', {}, "i32null", "{1,2,3}"},
+                        ArrayDotProductParam{'i', {}, "i64null", "{1,2,3}"},
+                        ArrayDotProductParam{'f', {}, "f32null", "{1,2,3}"},
+                        ArrayDotProductParam{'d', {}, "f64null", "{1,2,3}"})),
+    ArrayDotProductTest::printTestParams);
+
+class ArrayDotProductVarlenTest : public ArrayDotProductTest {
+ public:
+  static void SetUpTestSuite() {
+    run_ddl_statement("DROP TABLE IF EXISTS dot_product_varlen_test;");
+    run_ddl_statement(
+        "CREATE TABLE dot_product_varlen_test (fixlen2 FLOAT[2], fixlen3 FLOAT[3],"
+        " varlen2 FLOAT[], varlen3 FLOAT[], varlennull FLOAT[]);");
+    run_multiple_agg(
+        "INSERT INTO dot_product_varlen_test VALUES ({1,2}, {1,2,3}, {1,2}, {1,2,3}, "
+        "NULL);",
+        ExecutorDeviceType::CPU);
+  }
+
+  static void TearDownTestSuite() {
+    if (!g_keep_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS dot_product_varlen_test;");
+    }
+  }
+};
+
+TEST_P(ArrayDotProductVarlenTest, Varlen) {
+  auto const [dt, param] = GetParam();
+  SKIP_NO_GPU_P(dt);
+  std::ostringstream query;
+  query << "SELECT DOT_PRODUCT(" << param.lhs << ',' << param.rhs << ')'
+        << (param.expected ? "" : " IS NULL") << " FROM dot_product_varlen_test;";
+  auto const result_set = run_multiple_agg(query.str(), dt);
+  ASSERT_EQ(1u, result_set->rowCount()) << query.str();
+  constexpr bool translate_strings = true;
+  constexpr bool decimal_to_double = true;
+  auto const actual = result_set->getNextRow(translate_strings, decimal_to_double)[0];
+  if (param.expected) {
+    switch (param.v_type) {
+      case 'i':
+        ASSERT_EQ(int64_t(*param.expected), v<int64_t>(actual)) << query.str();
+        break;
+      case 'f':
+        ASSERT_EQ(*param.expected, v<float>(actual)) << query.str();
+        break;
+      case 'd':
+        ASSERT_EQ(*param.expected, v<double>(actual)) << query.str();
+        break;
+      default:
+        UNREACHABLE() << param.v_type;
+    }
+  } else {
+    bool const is_null = static_cast<bool>(v<int64_t>(actual));
+    ASSERT_TRUE(is_null) << query.str();
+  }
+}
+
+// Test DOT_PRODUCT() between different sizes of literal, fixed, and varlen arrays.
+INSTANTIATE_TEST_SUITE_P(
+    VarlenArrays,
+    ArrayDotProductVarlenTest,
+    testing::Combine(
+        testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+        testing::Values(ArrayDotProductParam{'i', 5, "{1,2}", "{1,2}"},
+                        ArrayDotProductParam{'i', {}, "{1,2}", "{1,2,3}"},
+                        ArrayDotProductParam{'d', 5, "{1,2}", "fixlen2"},
+                        ArrayDotProductParam{'d', {}, "{1,2}", "fixlen3"},
+                        ArrayDotProductParam{'d', 5, "{1,2}", "varlen2"},
+                        ArrayDotProductParam{'d', {}, "{1,2}", "varlen3"},
+                        ArrayDotProductParam{'i', {}, "{1,2,3}", "{1,2}"},
+                        ArrayDotProductParam{'i', 14, "{1,2,3}", "{1,2,3}"},
+                        ArrayDotProductParam{'d', {}, "{1,2,3}", "fixlen2"},
+                        ArrayDotProductParam{'d', 14, "{1,2,3}", "fixlen3"},
+                        ArrayDotProductParam{'d', {}, "{1,2,3}", "varlen2"},
+                        ArrayDotProductParam{'d', 14, "{1,2,3}", "varlen3"},
+                        ArrayDotProductParam{'d', 5, "fixlen2", "{1,2}"},
+                        ArrayDotProductParam{'d', {}, "fixlen2", "{1,2,3}"},
+                        ArrayDotProductParam{'f', 5, "fixlen2", "fixlen2"},
+                        ArrayDotProductParam{'f', {}, "fixlen2", "fixlen3"},
+                        ArrayDotProductParam{'f', 5, "fixlen2", "varlen2"},
+                        ArrayDotProductParam{'f', {}, "fixlen2", "varlen3"},
+                        ArrayDotProductParam{'d', {}, "fixlen3", "{1,2}"},
+                        ArrayDotProductParam{'d', 14, "fixlen3", "{1,2,3}"},
+                        ArrayDotProductParam{'f', {}, "fixlen3", "fixlen2"},
+                        ArrayDotProductParam{'f', 14, "fixlen3", "fixlen3"},
+                        ArrayDotProductParam{'f', {}, "fixlen3", "varlen2"},
+                        ArrayDotProductParam{'f', 14, "fixlen3", "varlen3"},
+                        ArrayDotProductParam{'d', 5, "varlen2", "{1,2}"},
+                        ArrayDotProductParam{'d', {}, "varlen2", "{1,2,3}"},
+                        ArrayDotProductParam{'f', 5, "varlen2", "fixlen2"},
+                        ArrayDotProductParam{'f', {}, "varlen2", "fixlen3"},
+                        ArrayDotProductParam{'f', 5, "varlen2", "varlen2"},
+                        ArrayDotProductParam{'f', {}, "varlen2", "varlen3"},
+                        ArrayDotProductParam{'d', {}, "varlen3", "{1,2}"},
+                        ArrayDotProductParam{'d', 14, "varlen3", "{1,2,3}"},
+                        ArrayDotProductParam{'f', {}, "varlen3", "fixlen2"},
+                        ArrayDotProductParam{'f', 14, "varlen3", "fixlen3"},
+                        ArrayDotProductParam{'f', {}, "varlen3", "varlen2"},
+                        ArrayDotProductParam{'f', 14, "varlen3", "varlen3"},
+                        ArrayDotProductParam{'f', {}, "varlennull", "{1,2,3}"},
+                        ArrayDotProductParam{'f', {}, "varlennull", "varlen3"},
+                        ArrayDotProductParam{'f', {}, "varlennull", "varlennull"})),
+    ArrayDotProductVarlenTest::printTestParams);
+
+// Use same dot_product_varlen_test table
+class ArrayDotProductExceptionsTest : public ArrayDotProductVarlenTest {};
+
+TEST_P(ArrayDotProductExceptionsTest, NonArrayAndMultidimensional) {
+  auto const [dt, param] = GetParam();
+  SKIP_NO_GPU_P(dt);
+  std::ostringstream query;
+  query << "SELECT DOT_PRODUCT(" << param.lhs << ',' << param.rhs << ')'
+        << " FROM dot_product_varlen_test;";
+  ASSERT_ANY_THROW(run_multiple_agg(query.str(), dt));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    NonArrayAndMultidimensional,
+    ArrayDotProductExceptionsTest,
+    testing::Combine(
+        testing::Values(ExecutorDeviceType::CPU, ExecutorDeviceType::GPU),
+        testing::Values(ArrayDotProductParam{{}, {}, "1.0", "{1.0,2.0}"},
+                        ArrayDotProductParam{{}, {}, "{1.0,2.0}", "1.0"},
+                        ArrayDotProductParam{{}, {}, "i8", "{1.0,i8val,3.0}"},
+                        ArrayDotProductParam{{}, {}, "i16", "{1.0,i16val,3.0}"},
+                        ArrayDotProductParam{{}, {}, "i32", "{1.0,i32val,3.0}"},
+                        ArrayDotProductParam{{}, {}, "i64", "{1.0,i64val,3.0}"},
+                        ArrayDotProductParam{{}, {}, "f32", "{1.0,f32val,3.0}"},
+                        ArrayDotProductParam{{}, {}, "f64", "{1.0,f64val,3.0}"},
+                        ArrayDotProductParam{{}, {}, "1.0", "fixlen2"},
+                        ArrayDotProductParam{{}, {}, "1.0", "varlen2"},
+                        ArrayDotProductParam{{}, {}, "{1,2,3}", "NULL"},
+                        ArrayDotProductParam{{}, {}, "fixlen2", "NULL"},
+                        ArrayDotProductParam{{}, {}, "varlen2", "NULL"},
+                        ArrayDotProductParam{{}, {}, "fixlen2", "1.0"},
+                        ArrayDotProductParam{{}, {}, "varlen2", "1.0"},
+                        ArrayDotProductParam{{}, {}, "{{1,2},{1,2}}", "{1.0,2.0}"},
+                        ArrayDotProductParam{{}, {}, "{1.0,2.0}", "{{1,2},{1,2}}"},
+                        ArrayDotProductParam{{}, {}, "{{1,2},{1,2}}", "fixlen2"},
+                        ArrayDotProductParam{{}, {}, "{{1,2},{1,2}}", "varlen2"},
+                        ArrayDotProductParam{{}, {}, "fixlen2", "{{1,2},{1,2}}"},
+                        ArrayDotProductParam{{}, {}, "varlen2", "{{1,2},{1,2}}"},
+                        ArrayDotProductParam{{}, {}, "f32", "(SELECT {1.0,2.0,3.0})"})),
+    ArrayDotProductExceptionsTest::printTestParams);
+
+int main(int argc, char** argv) {
+  g_is_test_env = true;
+
+  TestHelpers::init_logger_stderr_only(argc, argv);
+  testing::InitGoogleTest(&argc, argv);
+  namespace po = boost::program_options;
+
+  po::options_description desc("Options");
+  desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
+
+  logger::LogOptions log_options(argv[0]);
+  log_options.max_files_ = 0;  // stderr only by default
+  desc.add(log_options.get_options());
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::notify(vm);
+
+  if (vm.count("keep-data")) {
+    g_keep_data = true;
+  }
+
+  QR::init(BASE_PATH);
+
+  int err{0};
+  try {
+    err = RUN_ALL_TESTS();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
+  QR::reset();
+  return err;
+}

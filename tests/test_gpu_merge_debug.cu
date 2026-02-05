@@ -29,7 +29,6 @@ int main() {
 
     std::cout << "\nConfig:" << std::endl;
     std::cout << "  analysis_block_size: " << config.analysis_block_size << std::endl;
-    std::cout << "  target_partition_size: " << config.target_partition_size << std::endl;
     std::cout << "  min_partition_size: " << config.min_partition_size << std::endl;
     std::cout << "  max_partition_size: " << config.max_partition_size << std::endl;
     std::cout << "  merge_benefit_threshold: " << config.merge_benefit_threshold << std::endl;

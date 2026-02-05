@@ -34,7 +34,7 @@ int main() {
     std::cout << "========================================" << std::endl;
 
     std::vector<uint64_t> data;
-    if (!loadBinaryFile("/root/autodl-tmp/test/data/sosd/osm_cellids_800M_uint64.bin", data)) {
+    if (!loadBinaryFile("data/sosd/osm_cellids_800M_uint64.bin", data)) {
         std::cerr << "Failed to load data" << std::endl;
         return 1;
     }

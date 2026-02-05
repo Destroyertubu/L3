@@ -10,7 +10,7 @@ using namespace l3::codec;
 int main() {
     // Load 10000 elements from normal dataset
     std::vector<uint64_t> data(10000);
-    std::ifstream f("/root/autodl-tmp/test/data/sosd/normal_200M_uint64.bin", std::ios::binary);
+    std::ifstream f("data/sosd/normal_200M_uint64.bin", std::ios::binary);
     if (!f) { std::cerr << "Cannot open file\n"; return 1; }
     f.read(reinterpret_cast<char*>(data.data()), 10000 * sizeof(uint64_t));
     f.close();

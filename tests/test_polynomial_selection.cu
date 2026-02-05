@@ -14,10 +14,10 @@
 #include <random>
 #include <cmath>
 
-#include "/root/autodl-tmp/code/L3/include/L3_format.hpp"
-#include "/root/autodl-tmp/code/L3/include/L3_Vertical_format.hpp"
-#include "/root/autodl-tmp/code/L3/src/kernels/compression/encoder_Vertical_opt.cu"
-#include "/root/autodl-tmp/code/L3/src/kernels/decompression/decoder_Vertical_opt.cu"
+#include "include/L3_format.hpp"
+#include "include/L3_Vertical_format.hpp"
+#include "src/kernels/compression/encoder_Vertical_opt.cu"
+#include "src/kernels/decompression/decoder_Vertical_opt.cu"
 
 const char* getModelName(int model_type) {
     switch (model_type) {

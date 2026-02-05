@@ -11,7 +11,7 @@
 #include "../src/kernels/decompression/decoder_Vertical_opt.cu"
 
 int main() {
-    std::string filepath = "/root/autodl-tmp/test/data/sosd/2-normal_200M_uint64.bin";
+    std::string filepath = "data/sosd/2-normal_200M_uint64.bin";
     std::ifstream file(filepath, std::ios::binary);
     if (!file) { std::cerr << "Cannot open\n"; return 1; }
     

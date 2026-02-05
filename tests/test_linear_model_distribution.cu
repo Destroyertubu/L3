@@ -127,7 +127,7 @@ void analyzeModelDistribution(const std::vector<PartitionInfo>& partitions, cons
 }
 
 int main(int argc, char** argv) {
-    std::string filename = "/root/autodl-tmp/test/data/sosd/1-linear_200M_uint64.bin";
+    std::string filename = "data/sosd/1-linear_200M_uint64.bin";
     size_t max_elements = 10000000;  // 10M for quick test
 
     std::cout << "Linear Dataset Model Distribution Analysis" << std::endl;

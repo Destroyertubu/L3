@@ -4,7 +4,7 @@
 #include <dirent.h>
 #include <cuda_runtime.h>
 #include "sosd_loader.h"
-#include "L3.h"
+#include "L3_opt.h"
 
 #define CUDA_CHECK(call)                                                      \
     do {                                                                      \
@@ -81,7 +81,7 @@ int main(int argc, char** argv) {
     std::cout << std::endl;
 
     // SOSD dataset directory
-    const std::string sosd_dir = "/root/autodl-tmp/test/data";
+    const std::string sosd_dir = "data";
 
     // List all datasets using dirent
     std::vector<std::string> datasets;

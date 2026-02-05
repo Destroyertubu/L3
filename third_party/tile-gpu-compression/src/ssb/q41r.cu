@@ -243,7 +243,8 @@ void build_hashtable_p(int *filter_col, int *dim_key, int num_tuples, int *hash_
   int offset = blockIdx.x * blockDim.x + threadIdx.x;
   if (offset < num_tuples) {
     int val = filter_col[offset];
-    if (val == 0 || val == 1) {
+    // Q4.1: p_mfgr IN (1, 2) - MFGR#1 or MFGR#2
+    if (val == 1 || val == 2) {
       int key = dim_key[offset];
       int hash = HASH(key, num_slots);
       int init = 0;

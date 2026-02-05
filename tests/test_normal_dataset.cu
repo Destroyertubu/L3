@@ -298,8 +298,8 @@ TestResult runTest(const std::vector<T>& data, PartitionStrategy strategy, Decom
 }
 
 int main(int argc, char* argv[]) {
-    std::string data_file = "/root/autodl-tmp/test/data/sosd/2-normal_200M_uint64.bin";
-    std::string output_dir = "/root/autodl-tmp/code/L3/reports/L3/datasets/2-normal";
+    std::string data_file = "data/sosd/2-normal_200M_uint64.bin";
+    std::string output_dir = "reports/L3/datasets/2-normal";
 
     if (argc >= 2) data_file = argv[1];
     if (argc >= 3) output_dir = argv[2];

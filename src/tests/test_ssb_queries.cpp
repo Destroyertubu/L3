@@ -813,7 +813,7 @@ int main(int argc, char** argv) {
     std::cout << std::endl;
 
     // Load SSB data
-    const std::string data_dir = "/root/autodl-tmp/test/ssb_data";
+    const std::string data_dir = "data/ssb";
     SSBData ssb;
 
     std::cout << "Loading SSB data..." << std::endl;

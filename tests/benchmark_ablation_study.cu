@@ -23,7 +23,7 @@
 #include "L3_Vertical_format.hpp"
 #include "L3_Vertical_api.hpp"
 #include "L3_codec.hpp"
-#include "L3.h"
+#include "L3_opt.h"
 #include "sosd_loader.h"
 
 // Partitioner
@@ -45,7 +45,7 @@
 const int WARMUP_RUNS = 3;
 const int TIMED_RUNS = 5;
 const int PARTITION_SIZE = 4096;
-const std::string DATA_DIR = "/root/autodl-tmp/test/data/sosd/";
+const std::string DATA_DIR = "data/sosd/";
 
 // ============================================================================
 // Kernel Enum and Names
@@ -640,7 +640,7 @@ int main(int argc, char** argv) {
     }
 
     // Generate report
-    std::string report_path = "/root/autodl-tmp/code/L3/papers/responses/R2/O3/ablation_report.md";
+    std::string report_path = "papers/responses/R2/O3/ablation_report.md";
     generateReport(all_results, report_path);
 
     std::cout << "\n========================================" << std::endl;

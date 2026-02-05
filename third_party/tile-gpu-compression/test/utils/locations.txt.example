@@ -1,4 +1,1 @@
-# Example configuration file for TPCH dbgen location
-# Copy this file to locations.txt and update the path to your tpch-dbgen installation
-# Example: /path/to/your/tpch-dbgen/
-./third_party/tpch-dbgen/
+/Users/anil/Dev/repos/tpch-dbgen/

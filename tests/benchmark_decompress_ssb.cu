@@ -243,7 +243,7 @@ FLSCompressedData compressFLS(const std::vector<uint32_t>& data, int block_size 
 // ============================================================================
 
 int main(int argc, char** argv) {
-    std::string data_dir = "/root/autodl-tmp/test/ssb_data";
+    std::string data_dir = "data/ssb";
     if (argc > 1) data_dir = argv[1];
 
     std::cout << "================================================================" << std::endl;

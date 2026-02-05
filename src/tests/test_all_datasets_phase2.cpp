@@ -295,12 +295,12 @@ int main(int argc, char** argv) {
 
     // Define all 6 datasets
     std::vector<DatasetInfo> datasets = {
-        {"books_200M", "/root/autodl-tmp/test/data/books_200M_uint32.bin", "uint32", 0, 0},
-        {"fb_200M", "/root/autodl-tmp/test/data/fb_200M_uint64.bin", "uint64", 0, 0},
-        {"linear_200M", "/root/autodl-tmp/test/data/linear_200M_uint32_binary.bin", "uint32", 0, 0},
-        {"movieid", "/root/autodl-tmp/test/data/movieid_uint32.bin", "uint32", 0, 0},
-        {"normal_200M", "/root/autodl-tmp/test/data/normal_200M_uint32_binary.bin", "uint32", 0, 0},
-        {"wiki_200M", "/root/autodl-tmp/test/data/wiki_200M_uint64.bin", "uint64", 0, 0}
+        {"books_200M", "data/books_200M_uint32.bin", "uint32", 0, 0},
+        {"fb_200M", "data/fb_200M_uint64.bin", "uint64", 0, 0},
+        {"linear_200M", "data/linear_200M_uint32_binary.bin", "uint32", 0, 0},
+        {"movieid", "data/movieid_uint32.bin", "uint32", 0, 0},
+        {"normal_200M", "data/normal_200M_uint32_binary.bin", "uint32", 0, 0},
+        {"wiki_200M", "data/wiki_200M_uint64.bin", "uint64", 0, 0}
     };
 
     // Process each dataset

@@ -185,7 +185,6 @@ CompressedDataL3<T>* compressDataWithConfig(
             cost_config.analysis_block_size = config.cost_analysis_block_size;
             cost_config.min_partition_size = config.cost_min_partition_size;
             cost_config.max_partition_size = config.cost_max_partition_size;
-            cost_config.target_partition_size = config.cost_target_partition_size;
             cost_config.breakpoint_threshold = config.cost_breakpoint_threshold;
             cost_config.merge_benefit_threshold = config.cost_merge_benefit_threshold;
             cost_config.max_merge_rounds = config.cost_max_merge_rounds;

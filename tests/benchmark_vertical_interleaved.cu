@@ -420,7 +420,7 @@ void benchmarkInterleavedFormat(
 // ============================================================================
 
 int main(int argc, char** argv) {
-    std::string dataset_path = "/root/autodl-tmp/test/data/sosd/2-normal_200M_uint64.bin";
+    std::string dataset_path = "data/sosd/2-normal_200M_uint64.bin";
     int partition_size = 4096;
 
     if (argc > 1) {

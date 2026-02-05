@@ -1,0 +1,4 @@
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Thu Jan 29 17:05:20 CST 2026
+osgi.annotation-8.0.1.jar>aliyun-plugin=
+osgi.annotation-8.0.1.pom>aliyun-plugin=

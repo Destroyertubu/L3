@@ -1,0 +1,4 @@
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Thu Jan 29 17:05:20 CST 2026
+org.osgi.compendium-4.2.0.jar>aliyun-plugin=
+org.osgi.compendium-4.2.0.pom>aliyun-plugin=

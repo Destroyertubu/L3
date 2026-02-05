@@ -502,8 +502,8 @@ void generateReport(const std::vector<BenchmarkResult>& results, const std::stri
 // ============================================================================
 
 int main(int argc, char** argv) {
-    std::string base_path = "/root/autodl-tmp/test/data/sosd";
-    std::string output_path = "/root/autodl-tmp/code/L3/reports/L3/L3-Vertical-opt.md";
+    std::string base_path = "data/sosd";
+    std::string output_path = "reports/L3/L3-Vertical-opt.md";
 
     if (argc > 1) {
         base_path = argv[1];

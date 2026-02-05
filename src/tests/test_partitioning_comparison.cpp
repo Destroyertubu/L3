@@ -81,9 +81,9 @@ int main(int argc, char** argv) {
 
     // Test datasets
     std::vector<std::pair<std::string, std::string>> datasets = {
-        {"/root/autodl-tmp/test/data/sosd/osm_cellids_800M_uint64.bin", "osm_800M (random)"},
-        {"/root/autodl-tmp/test/data/sosd/books_200M_uint32.bin", "books_200M (sorted)"},
-        {"/root/autodl-tmp/test/data/sosd/fb_200M_uint64.bin", "fb_200M (semi-sorted)"}
+        {"data/sosd/osm_cellids_800M_uint64.bin", "osm_800M (random)"},
+        {"data/sosd/books_200M_uint32.bin", "books_200M (sorted)"},
+        {"data/sosd/fb_200M_uint64.bin", "fb_200M (semi-sorted)"}
     };
 
     for (const auto& ds : datasets) {

@@ -39,7 +39,7 @@
 #include "L3_Vertical_format.hpp"
 #include "L3_Vertical_api.hpp"
 #include "L3_random_access.hpp"
-#include "L3.h"
+#include "L3_opt.h"
 #include "sosd_loader.h"
 
 // Partitioner header (V2 only)
@@ -49,9 +49,9 @@
 // Configuration
 // ============================================================================
 
-const std::string DATA_DIR = "/root/autodl-tmp/test/data/sosd";
-const std::string REPORT_PATH = "/root/autodl-tmp/code/L3/papers/responses/R2/O3/benchmark_report.md";
-const std::string LOG_PATH = "/root/autodl-tmp/code/L3/papers/responses/sgt.txt";
+const std::string DATA_DIR = "data/sosd";
+const std::string REPORT_PATH = "papers/responses/R2/O3/benchmark_report.md";
+const std::string LOG_PATH = "papers/responses/sgt.txt";
 
 const int PARTITION_SIZE = 4096;
 const int WARMUP_RUNS = 3;

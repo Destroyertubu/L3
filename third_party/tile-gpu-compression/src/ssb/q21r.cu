@@ -205,7 +205,8 @@ void build_hashtable_p(int *filter_col, int *dim_key, int *dim_val, int num_tupl
   int offset = blockIdx.x * blockDim.x + threadIdx.x;
   if (offset < num_tuples) {
     int val = filter_col[offset];
-    if (val == 1) {
+    // Q2.1: p_category = 12 (MFGR#12)
+    if (val == 12) {
       int key = dim_key[offset];
       int val = dim_val[offset];
       int hash = HASH(key, num_slots);

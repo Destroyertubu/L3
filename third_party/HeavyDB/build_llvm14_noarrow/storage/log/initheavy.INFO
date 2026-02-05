@@ -1,0 +1,18 @@
+2026-01-29T18:51:02.093475 I 2330513 0 0 GDAL.cpp:116 GDAL SSL Certificate path: /etc/ssl/certs/ca-certificates.crt
+2026-01-29T18:51:02.095882 I 2330513 0 0 GDAL.cpp:126 GDAL Initialized: GDAL 3.8.4, released 2024/02/08
+2026-01-29T18:51:02.095974 I 2330513 0 0 DataMgr.cpp:283 Min CPU Slab Size is 256MB
+2026-01-29T18:51:02.096006 I 2330513 0 0 DataMgr.cpp:285 Max CPU Slab Size is 4096MB
+2026-01-29T18:51:02.096013 I 2330513 0 0 DataMgr.cpp:287 Default CPU Slab Size is 4096MB
+2026-01-29T18:51:02.096018 I 2330513 0 0 DataMgr.cpp:289 Max memory pool size for CPU is 1.65111e+06MB
+2026-01-29T18:51:02.096996 I 2330513 0 0 Calcite.cpp:375 Creating Calcite Handler,  Calcite Port is 3279 base data dir is storage
+2026-01-29T18:51:02.097013 I 2330513 0 0 Calcite.cpp:283 Running Calcite server as a daemon
+2026-01-29T18:51:02.809317 I 2330513 0 0 Calcite.cpp:323 Calcite server start took 700 ms 
+2026-01-29T18:51:02.809437 I 2330513 0 0 Calcite.cpp:324 ping took 8 ms 
+2026-01-29T18:51:03.156497 I 2330513 0 0 Catalog.cpp:368 Updating mapd_columns, legacy fixlen arrays
+2026-01-29T18:51:03.157016 I 2330513 0 0 Catalog.cpp:406 Updating mapd_columns, legacy geo columns
+2026-01-29T18:51:03.158063 I 2330513 0 0 Catalog.cpp:739 Executing rename_legacy_data_wrappers migration.
+2026-01-29T18:51:03.158204 I 2330513 0 0 Catalog.cpp:765 rename_legacy_data_wrappers migration completed.
+2026-01-29T18:51:03.159236 I 2330513 0 0 MigrationMgr.cpp:119 Checking for date columns requiring metadata migration.
+2026-01-29T18:51:03.160455 I 2330513 0 0 MigrationMgr.cpp:203 Successfully migrated all date in days column metadata.
+2026-01-29T18:51:03.160508 I 2330513 0 0 Catalog.cpp:964 Performing dashboard internal roles Migration.
+2026-01-29T18:51:03.160869 I 2330513 0 0 Catalog.cpp:1019 Successfully created dashboard system roles during migration.

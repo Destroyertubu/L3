@@ -680,8 +680,8 @@ void runAllPartitioningTests(const vector<T>& data, const string& dataset_name,
 // ============================================================================
 
 int main(int argc, char** argv) {
-    string data_file = "/root/autodl-tmp/test/data/sosd/2-normal_200M_uint64.bin";
-    string report_dir = "/root/autodl-tmp/code/L3/reports/L3/datasets/2-normal";
+    string data_file = "data/sosd/2-normal_200M_uint64.bin";
+    string report_dir = "reports/L3/datasets/2-normal";
 
     if (argc > 1) data_file = argv[1];
     if (argc > 2) report_dir = argv[2];

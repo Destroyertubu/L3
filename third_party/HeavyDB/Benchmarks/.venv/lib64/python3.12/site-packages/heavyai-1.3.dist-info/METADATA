@@ -1,0 +1,80 @@
+Metadata-Version: 2.1
+Name: heavyai
+Version: 1.3
+Summary: Data science toolkit support for HeavyDB
+Author-email: "Heavy.AI" <community@heavy.ai>
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Topic :: Database
+Classifier: Topic :: Scientific/Engineering
+Requires-Dist: pyheavydb >=6.0.0
+Requires-Dist: pyarrow >=3.0.0
+Requires-Dist: pandas
+Requires-Dist: numpy
+Requires-Dist: shapely
+Requires-Dist: importlib_metadata
+Requires-Dist: heavyai[doc] ; extra == "dev"
+Requires-Dist: heavyai[test] ; extra == "dev"
+Requires-Dist: pre-commit ; extra == "dev"
+Requires-Dist: flit ; extra == "dev"
+Requires-Dist: sphinx ; extra == "doc"
+Requires-Dist: numpydoc ; extra == "doc"
+Requires-Dist: sphinx-rtd-theme ; extra == "doc"
+Requires-Dist: numba >=0.49 ; extra == "gpu"
+Requires-Dist: pytest ; extra == "test"
+Requires-Dist: coverage ; extra == "test"
+Requires-Dist: pytest-mock ; extra == "test"
+Requires-Dist: geopandas ; extra == "test"
+Project-URL: Home, https://github.com/heavyai/heavyai
+Project-URL: Source, https://github.com/heavyai/heavyai
+Provides-Extra: dev
+Provides-Extra: doc
+Provides-Extra: gpu
+Provides-Extra: test
+
+[![PyPi package link](https://img.shields.io/pypi/v/heavyai?style=for-the-badge)](https://pypi.org/project/heavyai/)
+[![Conda package link](https://img.shields.io/conda/vn/conda-forge/heavyai?style=for-the-badge)](https://anaconda.org/conda-forge/heavyai)
+
+
+heavyai
+=======
+
+This package enables using common Python data science toolkits with
+[HeavyDB](http://heavy.ai).
+It brings data frame support on CPU and GPU as well as support for arrow.
+See the [documentation](http://heavyai.readthedocs.io/en/latest/?badge=latest)
+for more.
+
+Quick Install (CPU)
+-------------------
+
+Packages are available on conda-forge and PyPI:
+
+```bash
+# using conda-forge
+conda install -c conda-forge heavyai
+
+# using pip
+pip install heavyai
+```
+
+Quick Install (GPU)
+-------------------
+
+We recommend creating a fresh conda 3.8 or 3.9 environment when installing
+heavyai with GPU capabilities.
+
+To install heavyai for GPU Dataframe support (conda-only):
+
+```bash
+mamba create -n heavyai-gpu -c rapidsai -c nvidia -c conda-forge -c defaults \
+    --no-channel-priority \
+    cudf heavyai pyheavydb pytest shapely geopandas pyarrow=*=*cuda
+```
+
+Documentation
+-------------
+
+Further documentation for heavyai usage is available at: http://heavyai.readthedocs.io/
+

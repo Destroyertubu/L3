@@ -198,16 +198,16 @@ int main() {
 
     // Define datasets
     std::vector<DatasetInfo> datasets = {
-        {"movieid", "/root/autodl-tmp/test/data/movieid.txt", false, 4096},
-        {"linear_200M_uint32", "/root/autodl-tmp/test/data/linear_200M_uint32.txt", false, 4096},
-        {"books_200M_uint32", "/root/autodl-tmp/test/data/books_200M_uint32.bin", false, 4096},
-        {"normal_200M_uint32", "/root/autodl-tmp/test/data/normal_200M_uint32.txt", false, 4096},
-        {"fb_200M_uint64", "/root/autodl-tmp/test/data/fb_200M_uint64.bin", true, 4096},
-        {"wiki_200M_uint64", "/root/autodl-tmp/test/data/wiki_200M_uint64.bin", true, 4096}
+        {"movieid", "data/movieid.txt", false, 4096},
+        {"linear_200M_uint32", "data/linear_200M_uint32.txt", false, 4096},
+        {"books_200M_uint32", "data/books_200M_uint32.bin", false, 4096},
+        {"normal_200M_uint32", "data/normal_200M_uint32.txt", false, 4096},
+        {"fb_200M_uint64", "data/fb_200M_uint64.bin", true, 4096},
+        {"wiki_200M_uint64", "data/wiki_200M_uint64.bin", true, 4096}
     };
 
     // Open CSV file for results
-    std::string csv_filename = "/root/autodl-tmp/test/paint_scripts/encode/L3/L3imized_results.csv";
+    std::string csv_filename = "results/L3_optimized_results.csv";
     std::ofstream csv_file(csv_filename);
     csv_file << "Dataset,Elements,Size_MB,Compression_Ratio,Avg_Delta_Bits,"
              << "Compress_Time_ms,Compress_Throughput_GBps,"

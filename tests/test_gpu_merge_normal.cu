@@ -138,7 +138,7 @@ int main(int argc, char** argv) {
     std::cout << "=== GPU Merge Test on SOSD Datasets ===" << std::endl;
 
     // Test on normal_200M dataset
-    std::string normal_file = "/root/autodl-tmp/test/data/sosd/2-normal_200M_uint64.bin";
+    std::string normal_file = "data/sosd/2-normal_200M_uint64.bin";
 
     // Test different sizes
     std::vector<size_t> test_sizes = {1000000, 10000000, 50000000, 100000000, 200000000};

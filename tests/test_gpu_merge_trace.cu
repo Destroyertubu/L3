@@ -103,14 +103,8 @@ int main() {
                       breakpoint_positions[seg_idx + 1] : data_size;
         int seg_len = seg_end - seg_start;
 
-        int part_size = config.target_partition_size;
-        int num_parts = (seg_len + part_size - 1) / part_size;
-        if (num_parts > 0) {
-            part_size = (seg_len + num_parts - 1) / num_parts;
-            part_size = ((part_size + 31) / 32) * 32;
-            part_size = std::max(config.min_partition_size,
-                                std::min(config.max_partition_size, part_size));
-        }
+        // Start from min_partition_size (warp-aligned)
+        int part_size = ((config.min_partition_size + 31) / 32) * 32;
 
         std::cout << "Segment " << seg_idx << ": [" << seg_start << ", " << seg_end
                   << ") len=" << seg_len << " part_size=" << part_size << std::endl;

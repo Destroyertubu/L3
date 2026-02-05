@@ -164,16 +164,16 @@ int main() {
 
     // Define datasets (all binary files now)
     std::vector<DatasetInfo> datasets = {
-        {"movieid", "/root/autodl-tmp/test/data/movieid_uint32.bin", false, 4096},
-        {"linear_200M", "/root/autodl-tmp/test/data/linear_200M_uint32_binary.bin", false, 4096},
-        {"books_200M", "/root/autodl-tmp/test/data/books_200M_uint32.bin", false, 4096},
-        {"normal_200M", "/root/autodl-tmp/test/data/normal_200M_uint32_binary.bin", false, 4096},
-        {"fb_200M", "/root/autodl-tmp/test/data/fb_200M_uint64.bin", true, 4096},
-        {"wiki_200M", "/root/autodl-tmp/test/data/wiki_200M_uint64.bin", true, 4096}
+        {"movieid", "data/movieid_uint32.bin", false, 4096},
+        {"linear_200M", "data/linear_200M_uint32_binary.bin", false, 4096},
+        {"books_200M", "data/books_200M_uint32.bin", false, 4096},
+        {"normal_200M", "data/normal_200M_uint32_binary.bin", false, 4096},
+        {"fb_200M", "data/fb_200M_uint64.bin", true, 4096},
+        {"wiki_200M", "data/wiki_200M_uint64.bin", true, 4096}
     };
 
     // Open CSV file for results
-    std::string csv_filename = "/root/autodl-tmp/test/paint_scripts/encode/L3/kernel_benchmark_results.csv";
+    std::string csv_filename = "results/kernel_benchmark_results.csv";
     std::ofstream csv_file(csv_filename);
     csv_file << "Dataset,Version,Elements,Size_MB,Compression_Ratio,Avg_Delta_Bits,"
              << "Compress_Time_ms,Std_Dev_ms,Compress_Throughput_GBps" << std::endl;

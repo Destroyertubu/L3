@@ -646,15 +646,15 @@ int main() {
     };
 
     std::vector<Dataset> datasets = {
-        {"/root/autodl-tmp/test/data/sosd/1-linear_200M_uint32_binary.bin", "linear_200M", "uint32", false},
-        {"/root/autodl-tmp/test/data/sosd/2-normal_200M_uint32_binary.bin", "normal_200M", "uint32", false},
-        {"/root/autodl-tmp/test/data/sosd/3-poisson_87M_uint64.bin", "poisson_87M", "uint64", true},
-        {"/root/autodl-tmp/test/data/sosd/4-ml_uint64.bin", "ml", "uint64", true},
-        {"/root/autodl-tmp/test/data/sosd/5-books_200M_uint32.bin", "books_200M", "uint32", false},
-        {"/root/autodl-tmp/test/data/sosd/6-fb_200M_uint64.bin", "fb_200M", "uint64", true},
-        {"/root/autodl-tmp/test/data/sosd/7-wiki_200M_uint64.bin", "wiki_200M", "uint64", true},
-        {"/root/autodl-tmp/test/data/sosd/8-osm_cellids_800M_uint64.bin", "osm_800M", "uint64", true},
-        {"/root/autodl-tmp/test/data/sosd/9-movieid_uint32.bin", "movieid", "uint32", false}
+        {"data/sosd/1-linear_200M_uint32_binary.bin", "linear_200M", "uint32", false},
+        {"data/sosd/2-normal_200M_uint32_binary.bin", "normal_200M", "uint32", false},
+        {"data/sosd/3-poisson_87M_uint64.bin", "poisson_87M", "uint64", true},
+        {"data/sosd/4-ml_uint64.bin", "ml", "uint64", true},
+        {"data/sosd/5-books_200M_uint32.bin", "books_200M", "uint32", false},
+        {"data/sosd/6-fb_200M_uint64.bin", "fb_200M", "uint64", true},
+        {"data/sosd/7-wiki_200M_uint64.bin", "wiki_200M", "uint64", true},
+        {"data/sosd/8-osm_cellids_800M_uint64.bin", "osm_800M", "uint64", true},
+        {"data/sosd/9-movieid_uint32.bin", "movieid", "uint32", false}
     };
 
     std::vector<DatasetResult> all_results;
@@ -752,7 +752,7 @@ int main() {
     std::cout << "Generating Report..." << std::endl;
 
     std::string report = generateMarkdownReport(all_results);
-    std::string report_path = "/root/autodl-tmp/code/L3/reports/L3/L3-3-inner-comparison.md";
+    std::string report_path = "reports/L3/L3-3-inner-comparison.md";
     std::ofstream report_file(report_path);
     if (report_file.is_open()) {
         report_file << report;

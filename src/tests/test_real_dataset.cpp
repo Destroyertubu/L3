@@ -149,7 +149,7 @@ int main() {
     std::cout << "\n";
 
     // Load dataset
-    auto data = loadDataset("/root/autodl-tmp/test/data/linear_200M_uint32.txt");
+    auto data = loadDataset("data/linear_200M_uint32.txt");
     const size_t N = data.size();
 
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";

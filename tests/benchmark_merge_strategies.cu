@@ -761,7 +761,7 @@ ComparisonResult compareStrategies(const std::vector<T>& h_data, const std::stri
 // ============================================================================
 
 int main(int argc, char** argv) {
-    std::string ssb_data_dir = "/root/autodl-tmp/test/ssb_data";
+    std::string ssb_data_dir = "data/ssb";
     if (argc > 1) {
         ssb_data_dir = argv[1];
     }

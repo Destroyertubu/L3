@@ -74,6 +74,27 @@ CompressedDataVertical<T> encodeVerticalGPU_ZeroSync(
     cudaStream_t stream = 0);
 
 /**
+ * Encode data using GPU-only pipeline (poly cost-optimal variant)
+ */
+template<typename T>
+CompressedDataVertical<T> encodeVerticalGPU_PolyCost(
+    const std::vector<T>& data,
+    int partition_size,
+    const VerticalConfig& config,
+    cudaStream_t stream = 0);
+
+/**
+ * Encode data using GPU-only pipeline with zero mid-pipeline synchronization
+ * (poly cost-optimal variant)
+ */
+template<typename T>
+CompressedDataVertical<T> encodeVerticalGPU_ZeroSync_PolyCost(
+    const std::vector<T>& data,
+    int partition_size,
+    const VerticalConfig& config,
+    cudaStream_t stream = 0);
+
+/**
  * Free compressed data structure
  */
 template<typename T>
@@ -110,6 +131,24 @@ extern template CompressedDataVertical<uint64_t> encodeVerticalGPU_ZeroSync<uint
 extern template CompressedDataVertical<int32_t> encodeVerticalGPU_ZeroSync<int32_t>(
     const std::vector<int32_t>&, int, const VerticalConfig&, cudaStream_t);
 extern template CompressedDataVertical<int64_t> encodeVerticalGPU_ZeroSync<int64_t>(
+    const std::vector<int64_t>&, int, const VerticalConfig&, cudaStream_t);
+
+extern template CompressedDataVertical<uint32_t> encodeVerticalGPU_PolyCost<uint32_t>(
+    const std::vector<uint32_t>&, int, const VerticalConfig&, cudaStream_t);
+extern template CompressedDataVertical<uint64_t> encodeVerticalGPU_PolyCost<uint64_t>(
+    const std::vector<uint64_t>&, int, const VerticalConfig&, cudaStream_t);
+extern template CompressedDataVertical<int32_t> encodeVerticalGPU_PolyCost<int32_t>(
+    const std::vector<int32_t>&, int, const VerticalConfig&, cudaStream_t);
+extern template CompressedDataVertical<int64_t> encodeVerticalGPU_PolyCost<int64_t>(
+    const std::vector<int64_t>&, int, const VerticalConfig&, cudaStream_t);
+
+extern template CompressedDataVertical<uint32_t> encodeVerticalGPU_ZeroSync_PolyCost<uint32_t>(
+    const std::vector<uint32_t>&, int, const VerticalConfig&, cudaStream_t);
+extern template CompressedDataVertical<uint64_t> encodeVerticalGPU_ZeroSync_PolyCost<uint64_t>(
+    const std::vector<uint64_t>&, int, const VerticalConfig&, cudaStream_t);
+extern template CompressedDataVertical<int32_t> encodeVerticalGPU_ZeroSync_PolyCost<int32_t>(
+    const std::vector<int32_t>&, int, const VerticalConfig&, cudaStream_t);
+extern template CompressedDataVertical<int64_t> encodeVerticalGPU_ZeroSync_PolyCost<int64_t>(
     const std::vector<int64_t>&, int, const VerticalConfig&, cudaStream_t);
 
 extern template void freeCompressedData<uint32_t>(CompressedDataVertical<uint32_t>&);

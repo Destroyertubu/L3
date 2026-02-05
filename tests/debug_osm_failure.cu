@@ -59,7 +59,7 @@ std::vector<T> loadBinaryData(const std::string& path) {
 }
 
 int main() {
-    std::string path = "/root/autodl-tmp/test/data/sosd/8-osm_cellids_800M_uint64.bin";
+    std::string path = "data/sosd/8-osm_cellids_800M_uint64.bin";
 
     std::cout << "Loading osm_800M data..." << std::endl;
     std::vector<uint64_t> data = loadBinaryData<uint64_t>(path);

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata>
+  <groupId>ai.heavy</groupId>
+  <artifactId>heavyai-jdbc</artifactId>
+  <versioning>
+    <versions>
+      <version>9.0.0-SNAPSHOT</version>
+    </versions>
+    <lastUpdated>20260129093726</lastUpdated>
+  </versioning>
+</metadata>

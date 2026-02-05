@@ -37,7 +37,7 @@ std::vector<uint64_t> loadRawDataset(const std::string& filename, size_t max_ele
 }
 
 int main(int argc, char** argv) {
-    std::string filename = "/root/autodl-tmp/test/data/sosd/1-linear_200M_uint64.bin";
+    std::string filename = "data/sosd/1-linear_200M_uint64.bin";
     size_t max_elements = 10000000;  // 10M for testing
 
     std::cout << "Debug: Full Compression Pipeline" << std::endl;

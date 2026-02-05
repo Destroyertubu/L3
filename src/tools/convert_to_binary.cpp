@@ -54,16 +54,16 @@ int main() {
         std::cout << "Converting text files to binary format..." << std::endl;
 
         // movieid.txt -> movieid_uint32.bin
-        convertTextToBinary("/root/autodl-tmp/test/data/movieid.txt",
-                          "/root/autodl-tmp/test/data/movieid_uint32.bin", false);
+        convertTextToBinary("data/movieid.txt",
+                          "data/movieid_uint32.bin", false);
 
         // linear_200M_uint32.txt -> linear_200M_uint32_binary.bin
-        convertTextToBinary("/root/autodl-tmp/test/data/linear_200M_uint32.txt",
-                          "/root/autodl-tmp/test/data/linear_200M_uint32_binary.bin", false);
+        convertTextToBinary("data/linear_200M_uint32.txt",
+                          "data/linear_200M_uint32_binary.bin", false);
 
         // normal_200M_uint32.txt -> normal_200M_uint32_binary.bin
-        convertTextToBinary("/root/autodl-tmp/test/data/normal_200M_uint32.txt",
-                          "/root/autodl-tmp/test/data/normal_200M_uint32_binary.bin", false);
+        convertTextToBinary("data/normal_200M_uint32.txt",
+                          "data/normal_200M_uint32_binary.bin", false);
 
         std::cout << "All conversions completed successfully!" << std::endl;
 

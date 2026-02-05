@@ -608,8 +608,8 @@ void generateReport(const std::vector<BenchmarkResult>& results, const std::stri
 // ============================================================================
 
 int main(int argc, char** argv) {
-    std::string dataset_path = "/root/autodl-tmp/test/data/sosd/2-normal_200M_uint64.bin";
-    std::string output_path = "/root/autodl-tmp/code/L3/papers/responses/R2/O3/fixed_vs_costoptimal_benchmark.md";
+    std::string dataset_path = "data/sosd/2-normal_200M_uint64.bin";
+    std::string output_path = "papers/responses/R2/O3/fixed_vs_costoptimal_benchmark.md";
 
     if (argc > 1) dataset_path = argv[1];
     if (argc > 2) output_path = argv[2];

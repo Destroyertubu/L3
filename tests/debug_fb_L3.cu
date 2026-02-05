@@ -10,7 +10,7 @@
 // L3 headers
 #include "L3_codec.hpp"
 #include "L3_format.hpp"
-#include "L3.h"
+#include "L3_opt.h"
 
 // Partitioner header
 #include "encoder_cost_optimal_gpu_merge_v2.cuh"
@@ -59,7 +59,7 @@ int main() {
     std::cout << "=== L3 fb Dataset Debug Test ===" << std::endl;
 
     // Load fb dataset
-    std::string path = "/root/autodl-tmp/test/data/sosd/6-fb_200M_uint64.bin";
+    std::string path = "data/sosd/6-fb_200M_uint64.bin";
     std::vector<uint64_t> data;
 
     if (!loadDataset(path, data)) {

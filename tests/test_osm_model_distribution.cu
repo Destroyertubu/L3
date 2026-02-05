@@ -126,7 +126,7 @@ void analyzeModelDistribution(const std::vector<PartitionInfo>& partitions) {
 }
 
 int main(int argc, char** argv) {
-    std::string filename = "/root/autodl-tmp/test/data/sosd/8-osm_cellids_800M_uint64.bin";
+    std::string filename = "data/sosd/8-osm_cellids_800M_uint64.bin";
     size_t max_elements = 100000000;  // 100M elements for faster testing
 
     if (argc > 1) {
