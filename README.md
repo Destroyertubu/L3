@@ -9,7 +9,6 @@ L3 is an optimized GPU compression system that combines machine learning models 
 ### Key Innovations
 
 - **Learned Compression**: Uses linear/polynomial regression models to predict data values, storing only prediction errors
-- **GPU Acceleration**: CUDA kernels achieve 50-100 GB/s decompression throughput
 - **Random Access**: Access individual elements without decompressing entire dataset
 - **Predicate Pushdown**: Query optimization through partition-level filtering
 - **Cost-Optimal Partitioning**: Adaptive partitioning strategy based on delta-bit analysis
@@ -29,23 +28,6 @@ L3 is an optimized GPU compression system that combines machine learning models 
 
 Tested on NVIDIA H20 GPU with SSB Scale Factor 20 (119,968,352 rows):
 
-### Query Performance
-
-| Query Group | Avg Time | Selectivity | Speedup |
-|-------------|----------|-------------|---------|
-| Q1.x (Simple Aggregation) | 1.3-2.8 ms | 1.2-14.3% | ~100x |
-| Q2.x (Multi-Join) | 1.3-1.7 ms | 0.06-2.3% | ~150x |
-| Q3.x (Complex Join) | 1.3-1.9 ms | 0.002-85% | ~200x |
-| Q4.x (5-Table Join) | 2.8-3.6 ms | 0.002-0.2% | ~250x |
-
-### Compression Metrics
-
-| Metric | Value |
-|--------|-------|
-| Compression Ratio | 3-10x (data dependent) |
-| Decompression Throughput | 50-100 GB/s |
-| Random Access Latency | <100 ns per element |
-| Compression Throughput | 5-10 GB/s |
 
 ## Architecture
 
